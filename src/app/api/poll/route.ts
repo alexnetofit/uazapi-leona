@@ -6,12 +6,19 @@ import { ServerSnapshot, WebhookAlert } from "@/lib/types";
 export const maxDuration = 60; // Máximo de 60s para o cron
 
 export async function GET(request: NextRequest) {
-  // Proteger endpoint com CRON_SECRET
-  const authHeader = request.headers.get("authorization");
+  // Proteger endpoint com CRON_SECRET apenas quando configurado
+  // Permite chamadas internas (mesmo origin) sem autenticação
   const cronSecret = process.env.CRON_SECRET;
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (cronSecret) {
+    const authHeader = request.headers.get("authorization");
+    const referer = request.headers.get("referer") || "";
+    const host = request.headers.get("host") || "";
+    const isInternalCall = referer.includes(host);
+
+    if (!isInternalCall && authHeader !== `Bearer ${cronSecret}`) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
   }
 
   try {

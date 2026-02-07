@@ -63,22 +63,37 @@ export default function Home() {
     }
   }, []);
 
-  const loadAll = useCallback(async () => {
+  const triggerPoll = useCallback(async () => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 55000);
+      await fetch("/api/poll", { signal: controller.signal });
+      clearTimeout(timeout);
+    } catch (error) {
+      console.error("Erro ao disparar polling:", error);
+    }
+  }, []);
+
+  const loadAll = useCallback(async (poll = false) => {
     setLoading(true);
+    if (poll) {
+      await triggerPoll();
+    }
     await Promise.all([fetchStatus(), fetchServers()]);
     setLoading(false);
     setCountdown(120);
-  }, [fetchStatus, fetchServers]);
+  }, [fetchStatus, fetchServers, triggerPoll]);
 
   useEffect(() => {
-    loadAll();
+    loadAll(true); // Primeiro carregamento: dispara poll
 
     const pollInterval = setInterval(() => {
-      loadAll();
+      loadAll(true); // A cada 2min: dispara poll
     }, POLL_INTERVAL);
 
     return () => clearInterval(pollInterval);
-  }, [loadAll]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Countdown timer
   useEffect(() => {
@@ -102,7 +117,7 @@ export default function Home() {
       throw new Error(result.error || "Erro ao adicionar servidor");
     }
 
-    await loadAll();
+    await loadAll(true); // Ao adicionar, já dispara polling
   };
 
   const handleRemoveServer = async (name: string) => {
@@ -188,11 +203,12 @@ export default function Home() {
               </div>
 
               <button
-                onClick={loadAll}
-                className="px-3 py-1.5 rounded-lg text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                onClick={() => loadAll(true)}
+                disabled={loading}
+                className="px-3 py-1.5 rounded-lg text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 transition-colors"
                 title="Atualizar agora"
               >
-                Atualizar
+                {loading ? "Atualizando..." : "Atualizar"}
               </button>
 
               <WebhookConfig />
