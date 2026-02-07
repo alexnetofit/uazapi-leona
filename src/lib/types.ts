@@ -31,8 +31,25 @@ export interface ServerSnapshot {
   timestamp: string;
 }
 
+export interface PreviousCount {
+  totalInstances: number;
+  connectedInstances: number;
+  disconnectedInstances: number;
+  timestamp: string;
+}
+
+export interface ServerDashboard {
+  serverName: string;
+  totalInstances: number;
+  connectedInstances: number;
+  disconnectedInstances: number;
+  timestamp: string;
+  previous: PreviousCount | null;
+  instances: Instance[];
+}
+
 export interface DashboardData {
-  servers: ServerSnapshot[];
+  servers: ServerDashboard[];
   totalInstances: number;
   totalConnected: number;
   totalDisconnected: number;

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getAllSnapshots, getLastPoll } from "@/lib/kv";
-import { DashboardData } from "@/lib/types";
+import { getAllSnapshots, getLastPoll, getPreviousCount } from "@/lib/kv";
+import { DashboardData, ServerDashboard } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -11,15 +11,21 @@ export async function GET() {
       getLastPoll(),
     ]);
 
-    // Preparar snapshots sem a lista completa de instâncias (para economizar banda)
-    const serversData = snapshots.map((s) => ({
-      serverName: s.serverName,
-      totalInstances: s.totalInstances,
-      connectedInstances: s.connectedInstances,
-      disconnectedInstances: s.disconnectedInstances,
-      timestamp: s.timestamp,
-      instances: [], // Não enviar todas as instâncias para o dashboard
-    }));
+    // Buscar dados anteriores para cada servidor
+    const serversData: ServerDashboard[] = await Promise.all(
+      snapshots.map(async (s) => {
+        const previous = await getPreviousCount(s.serverName);
+        return {
+          serverName: s.serverName,
+          totalInstances: s.totalInstances,
+          connectedInstances: s.connectedInstances,
+          disconnectedInstances: s.disconnectedInstances,
+          timestamp: s.timestamp,
+          previous,
+          instances: [],
+        };
+      })
+    );
 
     const totalInstances = snapshots.reduce(
       (sum, s) => sum + s.totalInstances,

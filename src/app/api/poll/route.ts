@@ -35,8 +35,66 @@ export async function GET(request: NextRequest) {
 
     for (const server of servers) {
       try {
-        // Buscar instâncias atuais
-        const instances = await fetchAllInstances(server.name, server.token);
+        // Buscar instâncias com retry: tenta 2x antes de considerar erro
+        let instances;
+        let fetchError: unknown = null;
+
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try {
+            instances = await fetchAllInstances(server.name, server.token);
+            fetchError = null;
+            break;
+          } catch (err) {
+            fetchError = err;
+            console.error(
+              `Tentativa ${attempt}/2 falhou para ${server.name}:`,
+              err
+            );
+            if (attempt < 2) {
+              // Esperar 3s antes de tentar novamente
+              await new Promise((r) => setTimeout(r, 3000));
+            }
+          }
+        }
+
+        // Se ambas tentativas falharam, disparar webhook de erro e pular servidor
+        if (fetchError || !instances) {
+          console.error(
+            `Servidor ${server.name} inacessível após 2 tentativas`
+          );
+
+          const webhookUrl = await getWebhookUrl();
+          if (webhookUrl) {
+            const previousSnapshot = await getSnapshot(server.name);
+            try {
+              await fetch(webhookUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  server: server.name,
+                  type: "server_error",
+                  message: `Servidor ${server.name} inacessível após 2 tentativas`,
+                  error: fetchError instanceof Error ? fetchError.message : String(fetchError),
+                  timestamp: new Date().toISOString(),
+                  last_known_total: previousSnapshot?.totalInstances ?? null,
+                  last_known_connected: previousSnapshot?.connectedInstances ?? null,
+                }),
+              });
+            } catch (webhookError) {
+              console.error(
+                `Erro ao enviar webhook de erro para ${server.name}:`,
+                webhookError
+              );
+            }
+          }
+
+          results.push({
+            server: server.name,
+            status: "error",
+            alert: true,
+          });
+          continue;
+        }
 
         const connected = instances.filter(isConnected);
         const now = new Date().toISOString();

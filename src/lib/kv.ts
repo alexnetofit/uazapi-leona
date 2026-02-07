@@ -1,8 +1,9 @@
 import { Redis } from "@upstash/redis";
-import { Server, ServerSnapshot } from "./types";
+import { Server, ServerSnapshot, PreviousCount } from "./types";
 
 const SERVERS_KEY = "uazapi:servers";
 const SNAPSHOT_PREFIX = "uazapi:snapshot:";
+const PREVIOUS_PREFIX = "uazapi:previous:";
 const WEBHOOK_KEY = "uazapi:webhook_url";
 const LAST_POLL_KEY = "uazapi:last_poll";
 
@@ -66,7 +67,29 @@ export async function getSnapshot(
 
 export async function saveSnapshot(snapshot: ServerSnapshot): Promise<void> {
   const redis = getRedis();
+  // Salvar a contagem atual como "anterior" antes de sobrescrever
+  const current = await getSnapshot(snapshot.serverName);
+  if (current) {
+    const prev: PreviousCount = {
+      totalInstances: current.totalInstances,
+      connectedInstances: current.connectedInstances,
+      disconnectedInstances: current.disconnectedInstances,
+      timestamp: current.timestamp,
+    };
+    await redis.set(`${PREVIOUS_PREFIX}${snapshot.serverName}`, prev);
+  }
   await redis.set(`${SNAPSHOT_PREFIX}${snapshot.serverName}`, snapshot);
+}
+
+export async function getPreviousCount(
+  serverName: string
+): Promise<PreviousCount | null> {
+  if (!isRedisConfigured()) return null;
+  const redis = getRedis();
+  const data = await redis.get<PreviousCount>(
+    `${PREVIOUS_PREFIX}${serverName}`
+  );
+  return data || null;
 }
 
 export async function getAllSnapshots(): Promise<ServerSnapshot[]> {
