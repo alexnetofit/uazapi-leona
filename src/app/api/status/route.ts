@@ -1,28 +1,49 @@
 import { NextResponse } from "next/server";
-import { getAllSnapshots, getLastPoll, getPreviousCount } from "@/lib/kv";
+import { getServers, getAllSnapshots, getLastPoll, getPreviousCount } from "@/lib/kv";
 import { DashboardData, ServerDashboard } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const [snapshots, lastPoll] = await Promise.all([
+    const [servers, snapshots, lastPoll] = await Promise.all([
+      getServers(),
       getAllSnapshots(),
       getLastPoll(),
     ]);
 
-    // Buscar dados anteriores para cada servidor
+    // Mapa de snapshots por nome do servidor
+    const snapshotMap = new Map(snapshots.map((s) => [s.serverName, s]));
+
+    // Incluir TODOS os servidores cadastrados, mesmo sem snapshot
     const serversData: ServerDashboard[] = await Promise.all(
-      snapshots.map(async (s) => {
-        const previous = await getPreviousCount(s.serverName);
+      servers.map(async (server) => {
+        const snapshot = snapshotMap.get(server.name);
+        const previous = await getPreviousCount(server.name);
+
+        if (snapshot) {
+          return {
+            serverName: snapshot.serverName,
+            totalInstances: snapshot.totalInstances,
+            connectedInstances: snapshot.connectedInstances,
+            disconnectedInstances: snapshot.disconnectedInstances,
+            timestamp: snapshot.timestamp,
+            previous,
+            instances: [],
+            error: false,
+          };
+        }
+
+        // Servidor sem snapshot (nunca conseguiu conectar)
         return {
-          serverName: s.serverName,
-          totalInstances: s.totalInstances,
-          connectedInstances: s.connectedInstances,
-          disconnectedInstances: s.disconnectedInstances,
-          timestamp: s.timestamp,
-          previous,
+          serverName: server.name,
+          totalInstances: 0,
+          connectedInstances: 0,
+          disconnectedInstances: 0,
+          timestamp: "",
+          previous: null,
           instances: [],
+          error: true,
         };
       })
     );

@@ -9,6 +9,7 @@ interface ServerCardProps {
   disconnectedInstances: number;
   timestamp: string;
   previous: PreviousCount | null;
+  error?: boolean;
   onRemove: (name: string) => void;
 }
 
@@ -38,9 +39,11 @@ export default function ServerCard({
   disconnectedInstances,
   timestamp,
   previous,
+  error,
   onRemove,
 }: ServerCardProps) {
   const formatDate = (iso: string) => {
+    if (!iso) return "";
     const d = new Date(iso);
     return d.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
   };
@@ -51,14 +54,16 @@ export default function ServerCard({
       : "0";
 
   return (
-    <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-4 sm:p-5 hover:shadow-lg hover:shadow-zinc-900/50 transition-shadow">
+    <div className={`bg-zinc-900 rounded-2xl border p-4 sm:p-5 hover:shadow-lg hover:shadow-zinc-900/50 transition-shadow ${error ? "border-red-800/60" : "border-zinc-800"}`}>
       <div className="flex items-center justify-between mb-3 sm:mb-4">
         <div className="flex items-center gap-2">
           <div
             className={`w-2.5 h-2.5 rounded-full ${
-              connectedInstances > 0
-                ? "bg-emerald-500 shadow-emerald-500/50 shadow-sm"
-                : "bg-zinc-400"
+              error
+                ? "bg-red-500 shadow-red-500/50 shadow-sm"
+                : connectedInstances > 0
+                  ? "bg-emerald-500 shadow-emerald-500/50 shadow-sm"
+                  : "bg-zinc-400"
             }`}
           />
           <h3 className="text-sm sm:text-base font-semibold text-zinc-100">
@@ -92,68 +97,82 @@ export default function ServerCard({
         </button>
       </div>
 
-      {/* Contagem atual */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-2">
-        <div className="text-center">
-          <p className="text-[10px] sm:text-xs text-zinc-400">Total</p>
-          <p className="text-lg sm:text-xl font-bold text-zinc-100">
-            {totalInstances}
+      {error ? (
+        /* Estado de erro */
+        <div className="bg-red-950/20 border border-red-900/30 rounded-xl p-3 text-center">
+          <p className="text-xs text-red-400 font-medium mb-1">
+            Servidor inacessível
           </p>
-          {previous && (
-            <DiffBadge current={totalInstances} previous={previous.totalInstances} />
-          )}
+          <p className="text-[10px] text-red-500/70">
+            Não foi possível conectar. Verifique o nome e token ou remova este servidor.
+          </p>
         </div>
-        <div className="text-center">
-          <p className="text-[10px] sm:text-xs text-emerald-400">Conectadas</p>
-          <p className="text-lg sm:text-xl font-bold text-emerald-400">
-            {connectedInstances}
-          </p>
-          {previous && (
-            <DiffBadge current={connectedInstances} previous={previous.connectedInstances} />
-          )}
-        </div>
-        <div className="text-center">
-          <p className="text-[10px] sm:text-xs text-red-400">Desconectadas</p>
-          <p className="text-lg sm:text-xl font-bold text-red-400">
-            {disconnectedInstances}
-          </p>
-          {previous && (
-            <DiffBadge current={disconnectedInstances} previous={previous.disconnectedInstances} />
-          )}
-        </div>
-      </div>
-
-      {/* Contagem anterior */}
-      {previous && (
-        <div className="bg-zinc-800/50 rounded-lg px-3 py-2 mb-3">
-          <p className="text-[9px] sm:text-[10px] text-zinc-500 mb-1 uppercase tracking-wide">
-            Anterior ({formatDate(previous.timestamp)})
-          </p>
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <span className="text-[11px] sm:text-xs text-zinc-400 font-medium">
-              {previous.totalInstances}
-            </span>
-            <span className="text-[11px] sm:text-xs text-emerald-500 font-medium">
-              {previous.connectedInstances}
-            </span>
-            <span className="text-[11px] sm:text-xs text-red-500 font-medium">
-              {previous.disconnectedInstances}
-            </span>
+      ) : (
+        <>
+          {/* Contagem atual */}
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-2">
+            <div className="text-center">
+              <p className="text-[10px] sm:text-xs text-zinc-400">Total</p>
+              <p className="text-lg sm:text-xl font-bold text-zinc-100">
+                {totalInstances}
+              </p>
+              {previous && (
+                <DiffBadge current={totalInstances} previous={previous.totalInstances} />
+              )}
+            </div>
+            <div className="text-center">
+              <p className="text-[10px] sm:text-xs text-emerald-400">Conectadas</p>
+              <p className="text-lg sm:text-xl font-bold text-emerald-400">
+                {connectedInstances}
+              </p>
+              {previous && (
+                <DiffBadge current={connectedInstances} previous={previous.connectedInstances} />
+              )}
+            </div>
+            <div className="text-center">
+              <p className="text-[10px] sm:text-xs text-red-400">Desconectadas</p>
+              <p className="text-lg sm:text-xl font-bold text-red-400">
+                {disconnectedInstances}
+              </p>
+              {previous && (
+                <DiffBadge current={disconnectedInstances} previous={previous.disconnectedInstances} />
+              )}
+            </div>
           </div>
-        </div>
+
+          {/* Contagem anterior */}
+          {previous && (
+            <div className="bg-zinc-800/50 rounded-lg px-3 py-2 mb-3">
+              <p className="text-[9px] sm:text-[10px] text-zinc-500 mb-1 uppercase tracking-wide">
+                Anterior ({formatDate(previous.timestamp)})
+              </p>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <span className="text-[11px] sm:text-xs text-zinc-400 font-medium">
+                  {previous.totalInstances}
+                </span>
+                <span className="text-[11px] sm:text-xs text-emerald-500 font-medium">
+                  {previous.connectedInstances}
+                </span>
+                <span className="text-[11px] sm:text-xs text-red-500 font-medium">
+                  {previous.disconnectedInstances}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Barra de progresso */}
+          <div className="w-full bg-zinc-800 rounded-full h-1.5 sm:h-2 mb-2 sm:mb-3">
+            <div
+              className="bg-emerald-500 h-1.5 sm:h-2 rounded-full transition-all duration-500"
+              style={{ width: `${connectedPercent}%` }}
+            />
+          </div>
+
+          <p className="text-[10px] sm:text-xs text-zinc-500 text-right">
+            {formatDate(timestamp)}
+          </p>
+        </>
       )}
-
-      {/* Barra de progresso */}
-      <div className="w-full bg-zinc-800 rounded-full h-1.5 sm:h-2 mb-2 sm:mb-3">
-        <div
-          className="bg-emerald-500 h-1.5 sm:h-2 rounded-full transition-all duration-500"
-          style={{ width: `${connectedPercent}%` }}
-        />
-      </div>
-
-      <p className="text-[10px] sm:text-xs text-zinc-500 text-right">
-        {formatDate(timestamp)}
-      </p>
     </div>
   );
 }

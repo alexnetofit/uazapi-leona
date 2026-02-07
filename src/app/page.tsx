@@ -300,6 +300,7 @@ export default function Home() {
                       disconnectedInstances={server.disconnectedInstances}
                       timestamp={server.timestamp}
                       previous={server.previous ?? null}
+                      error={server.error}
                       onRemove={handleRemoveServer}
                     />
                   ))}

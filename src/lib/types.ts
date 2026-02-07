@@ -46,6 +46,7 @@ export interface ServerDashboard {
   timestamp: string;
   previous: PreviousCount | null;
   instances: Instance[];
+  error?: boolean;
 }
 
 export interface DashboardData {
