@@ -19,22 +19,44 @@ export default function Home() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch("/api/status");
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const res = await fetch("/api/status", { signal: controller.signal });
+      clearTimeout(timeout);
       if (res.ok) {
         const statusData = await res.json();
         setData(statusData);
+      } else {
+        // Se a API retornar erro, setar dados vazios para sair do loading
+        setData({
+          servers: [],
+          totalInstances: 0,
+          totalConnected: 0,
+          totalDisconnected: 0,
+          lastPoll: null,
+        });
       }
     } catch (error) {
       console.error("Erro ao buscar status:", error);
+      setData({
+        servers: [],
+        totalInstances: 0,
+        totalConnected: 0,
+        totalDisconnected: 0,
+        lastPoll: null,
+      });
     }
   }, []);
 
   const fetchServers = useCallback(async () => {
     try {
-      const res = await fetch("/api/servers");
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const res = await fetch("/api/servers", { signal: controller.signal });
+      clearTimeout(timeout);
       if (res.ok) {
         const serverList = await res.json();
-        setServers(serverList);
+        setServers(Array.isArray(serverList) ? serverList : []);
       }
     } catch (error) {
       console.error("Erro ao buscar servidores:", error);
