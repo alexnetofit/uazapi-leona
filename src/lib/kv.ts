@@ -12,7 +12,9 @@ function isRedisConfigured(): boolean {
 
 function getRedis(): Redis {
   if (!isRedisConfigured()) {
-    throw new Error("REDIS_NOT_CONFIGURED");
+    throw new Error(
+      "Banco de dados não configurado. Configure as variáveis KV_REST_API_URL e KV_REST_API_TOKEN na Vercel."
+    );
   }
   return new Redis({
     url: process.env.KV_REST_API_URL!,
