@@ -24,8 +24,8 @@ self.addEventListener("push", (event) => {
   const title = data.title || "Gestão UAZAPI";
   const options = {
     body: data.body || "Nova notificação",
-    icon: "/icons/icon-192.svg",
-    badge: "/icons/icon-192.svg",
+    icon: "/icons/alert.png",
+    badge: "/icons/alert.png",
     tag: data.tag || "uazapi-alert",
     renotify: true,
     vibrate: [200, 100, 200],
