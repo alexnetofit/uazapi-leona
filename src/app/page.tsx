@@ -8,14 +8,22 @@ import SearchBar from "@/components/SearchBar";
 import WebhookConfig from "@/components/WebhookConfig";
 import { DashboardData } from "@/lib/types";
 
-const POLL_INTERVAL = 120000; // 2 minutos
+const POLL_INTERVAL_SECONDS = 120; // 2 minutos
+
+function calcSecondsUntilNextPoll(lastPoll: string | null): number {
+  if (!lastPoll) return 0;
+  const lastPollTime = new Date(lastPoll).getTime();
+  const nextPollTime = lastPollTime + POLL_INTERVAL_SECONDS * 1000;
+  const remaining = Math.round((nextPollTime - Date.now()) / 1000);
+  return Math.max(0, Math.min(remaining, POLL_INTERVAL_SECONDS));
+}
 
 export default function Home() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [servers, setServers] = useState<{ name: string }[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [countdown, setCountdown] = useState(120);
+  const [countdown, setCountdown] = useState(POLL_INTERVAL_SECONDS);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -26,25 +34,29 @@ export default function Home() {
       if (res.ok) {
         const statusData = await res.json();
         setData(statusData);
+        return statusData as DashboardData;
       } else {
-        // Se a API retornar erro, setar dados vazios para sair do loading
-        setData({
+        const empty: DashboardData = {
           servers: [],
           totalInstances: 0,
           totalConnected: 0,
           totalDisconnected: 0,
           lastPoll: null,
-        });
+        };
+        setData(empty);
+        return empty;
       }
     } catch (error) {
       console.error("Erro ao buscar status:", error);
-      setData({
+      const empty: DashboardData = {
         servers: [],
         totalInstances: 0,
         totalConnected: 0,
         totalDisconnected: 0,
         lastPoll: null,
-      });
+      };
+      setData(empty);
+      return empty;
     }
   }, []);
 
@@ -74,34 +86,42 @@ export default function Home() {
     }
   }, []);
 
-  const loadAll = useCallback(async (poll = false) => {
+  const loadData = useCallback(async () => {
     setLoading(true);
-    if (poll) {
-      await triggerPoll();
-    }
-    await Promise.all([fetchStatus(), fetchServers()]);
+    const [statusData] = await Promise.all([fetchStatus(), fetchServers()]);
+    setCountdown(calcSecondsUntilNextPoll(statusData?.lastPoll ?? null));
     setLoading(false);
-    setCountdown(120);
+  }, [fetchStatus, fetchServers]);
+
+  const manualPoll = useCallback(async () => {
+    setLoading(true);
+    await triggerPoll();
+    const [statusData] = await Promise.all([fetchStatus(), fetchServers()]);
+    setCountdown(calcSecondsUntilNextPoll(statusData?.lastPoll ?? null));
+    setLoading(false);
   }, [fetchStatus, fetchServers, triggerPoll]);
 
+  // Carregamento inicial: só busca dados do banco (sem poll, que é feito pelo cron)
   useEffect(() => {
-    loadAll(true); // Primeiro carregamento: dispara poll
-
-    const pollInterval = setInterval(() => {
-      loadAll(true); // A cada 2min: dispara poll
-    }, POLL_INTERVAL);
-
-    return () => clearInterval(pollInterval);
+    loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Countdown timer
+  // Countdown baseado no lastPoll do backend
   useEffect(() => {
-    const countdownInterval = setInterval(() => {
-      setCountdown((prev) => (prev > 0 ? prev - 1 : 120));
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 0) {
+          // Tempo esgotou, recarregar dados do banco
+          loadData();
+          return POLL_INTERVAL_SECONDS;
+        }
+        return prev - 1;
+      });
     }, 1000);
 
-    return () => clearInterval(countdownInterval);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleAddServer = async (name: string, token: string) => {
@@ -117,7 +137,7 @@ export default function Home() {
       throw new Error(result.error || "Erro ao adicionar servidor");
     }
 
-    await loadAll(true); // Ao adicionar, já dispara polling
+    await manualPoll();
   };
 
   const handleRemoveServer = async (name: string) => {
@@ -127,7 +147,7 @@ export default function Home() {
       });
 
       if (res.ok) {
-        await loadAll();
+        await loadData();
       }
     } catch (error) {
       console.error("Erro ao remover servidor:", error);
@@ -203,7 +223,7 @@ export default function Home() {
               </div>
 
               <button
-                onClick={() => loadAll(true)}
+                onClick={manualPoll}
                 disabled={loading}
                 className="px-3 py-1.5 rounded-lg text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 transition-colors"
                 title="Atualizar agora"
