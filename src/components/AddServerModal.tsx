@@ -48,22 +48,22 @@ export default function AddServerModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
         onClick={onClose}
       />
 
       {/* Modal */}
-      <div className="relative bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-6 w-full max-w-md mx-4 shadow-2xl">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-4">
+      <div className="relative bg-zinc-900 rounded-2xl border border-zinc-800 p-5 sm:p-6 w-full max-w-md shadow-2xl">
+        <h2 className="text-lg font-semibold text-zinc-100 mb-4">
           Adicionar Servidor
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+            <label className="block text-sm font-medium text-zinc-300 mb-1">
               Nome do Servidor
             </label>
             <input
@@ -71,16 +71,16 @@ export default function AddServerModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="meuservidor"
-              className="w-full px-4 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              className="w-full px-4 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
             />
-            <p className="text-xs text-zinc-400 mt-1">
-              Será usado como: https://<strong>{name || "nome"}</strong>
+            <p className="text-xs text-zinc-500 mt-1">
+              Será usado como: https://<strong className="text-zinc-300">{name || "nome"}</strong>
               .uazapi.com
             </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+            <label className="block text-sm font-medium text-zinc-300 mb-1">
               Admin Token
             </label>
             <input
@@ -88,12 +88,12 @@ export default function AddServerModal({
               value={token}
               onChange={(e) => setToken(e.target.value)}
               placeholder="Token do servidor"
-              className="w-full px-4 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              className="w-full px-4 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
             />
           </div>
 
           {error && (
-            <div className="bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 text-sm px-4 py-2 rounded-xl">
+            <div className="bg-red-950/30 text-red-400 text-sm px-4 py-2 rounded-xl">
               {error}
             </div>
           )}
@@ -102,7 +102,7 @@ export default function AddServerModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2.5 rounded-xl border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              className="flex-1 px-4 py-2.5 rounded-xl border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors"
             >
               Cancelar
             </button>

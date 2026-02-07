@@ -101,18 +101,15 @@ export default function Home() {
     setLoading(false);
   }, [fetchStatus, fetchServers, triggerPoll]);
 
-  // Carregamento inicial: só busca dados do banco (sem poll, que é feito pelo cron)
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Countdown baseado no lastPoll do backend
   useEffect(() => {
     const interval = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 0) {
-          // Tempo esgotou, recarregar dados do banco
           loadData();
           return POLL_INTERVAL_SECONDS;
         }
@@ -161,17 +158,17 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+    <div className="min-h-screen bg-zinc-950">
       {/* Header */}
-      <header className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+      <header className="bg-zinc-900 border-b border-zinc-800 sticky top-0 z-30">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  width="18"
-                  height="18"
+                  width="16"
+                  height="16"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="white"
@@ -185,25 +182,23 @@ export default function Home() {
                 </svg>
               </div>
               <div>
-                <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                <h1 className="text-sm sm:text-lg font-bold text-zinc-100 leading-tight">
                   Gestão UAZAPI
                 </h1>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                <p className="text-[10px] sm:text-xs text-zinc-400 hidden sm:block">
                   Monitoramento de instâncias
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="flex items-center gap-1.5 sm:gap-3">
               {/* Countdown */}
-              <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800 px-3 py-1.5 rounded-lg">
+              <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-zinc-400 bg-zinc-800 px-2 sm:px-3 py-1.5 rounded-lg">
                 <svg
                   className="animate-spin h-3 w-3"
                   viewBox="0 0 24 24"
                   fill="none"
-                  style={{
-                    animationDuration: "3s",
-                  }}
+                  style={{ animationDuration: "3s" }}
                 >
                   <circle
                     cx="12"
@@ -225,19 +220,20 @@ export default function Home() {
               <button
                 onClick={manualPoll}
                 disabled={loading}
-                className="px-3 py-1.5 rounded-lg text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 transition-colors"
+                className="px-2 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs bg-zinc-800 text-zinc-400 hover:bg-zinc-700 disabled:opacity-50 transition-colors"
                 title="Atualizar agora"
               >
-                {loading ? "Atualizando..." : "Atualizar"}
+                {loading ? "..." : "Atualizar"}
               </button>
 
               <WebhookConfig />
 
               <button
                 onClick={() => setShowAddModal(true)}
-                className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors whitespace-nowrap"
+                className="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-blue-600 text-white text-xs sm:text-sm font-medium hover:bg-blue-700 transition-colors whitespace-nowrap"
               >
-                + Servidor
+                <span className="sm:hidden">+</span>
+                <span className="hidden sm:inline">+ Servidor</span>
               </button>
             </div>
           </div>
@@ -245,7 +241,7 @@ export default function Home() {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
         {loading && !data ? (
           <div className="flex items-center justify-center py-20">
             <div className="flex flex-col items-center gap-3">
@@ -268,7 +264,7 @@ export default function Home() {
                   className="opacity-75"
                 />
               </svg>
-              <p className="text-zinc-500 dark:text-zinc-400 text-sm">
+              <p className="text-zinc-400 text-sm">
                 Carregando dados...
               </p>
             </div>
@@ -291,10 +287,10 @@ export default function Home() {
             {/* Cards dos Servidores */}
             {data && data.servers.length > 0 ? (
               <div>
-                <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-4">
+                <h2 className="text-base sm:text-lg font-semibold text-zinc-100 mb-3 sm:mb-4">
                   Servidores ({data.servers.length})
                 </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   {data.servers.map((server) => (
                     <ServerCard
                       key={server.serverName}
@@ -310,12 +306,12 @@ export default function Home() {
                 </div>
               </div>
             ) : servers.length === 0 ? (
-              <div className="text-center py-20">
-                <div className="w-16 h-16 bg-zinc-100 dark:bg-zinc-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <div className="text-center py-16 sm:py-20">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-zinc-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
-                    width="28"
-                    height="28"
+                    width="24"
+                    height="24"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -324,30 +320,16 @@ export default function Home() {
                     strokeLinejoin="round"
                     className="text-zinc-400"
                   >
-                    <rect
-                      x="2"
-                      y="2"
-                      width="20"
-                      height="8"
-                      rx="2"
-                      ry="2"
-                    />
-                    <rect
-                      x="2"
-                      y="14"
-                      width="20"
-                      height="8"
-                      rx="2"
-                      ry="2"
-                    />
+                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2" />
+                    <rect x="2" y="14" width="20" height="8" rx="2" ry="2" />
                     <line x1="6" y1="6" x2="6.01" y2="6" />
                     <line x1="6" y1="18" x2="6.01" y2="18" />
                   </svg>
                 </div>
-                <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-2">
+                <h3 className="text-base sm:text-lg font-semibold text-zinc-100 mb-2">
                   Nenhum servidor cadastrado
                 </h3>
-                <p className="text-zinc-500 dark:text-zinc-400 mb-4 text-sm">
+                <p className="text-zinc-400 mb-4 text-sm">
                   Adicione seu primeiro servidor UAZAPI para começar o
                   monitoramento.
                 </p>
@@ -360,7 +342,7 @@ export default function Home() {
               </div>
             ) : (
               <div className="text-center py-12">
-                <p className="text-zinc-500 dark:text-zinc-400 text-sm">
+                <p className="text-zinc-400 text-sm">
                   Servidores cadastrados mas sem dados ainda. Aguarde o próximo
                   polling ou clique em &quot;Atualizar&quot;.
                 </p>
