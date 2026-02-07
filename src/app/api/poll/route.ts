@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServers, getSnapshot, saveSnapshot, getWebhookUrl, setLastPoll } from "@/lib/kv";
 import { fetchAllInstances, isConnected, getInstanceNumber } from "@/lib/uazapi";
+import { sendPushToAll } from "@/lib/push";
 import { ServerSnapshot, WebhookAlert } from "@/lib/types";
 
 export const maxDuration = 60; // Máximo de 60s para o cron
@@ -64,8 +65,16 @@ export async function GET(request: NextRequest) {
           );
 
           const webhookUrl = await getWebhookUrl();
+          const previousSnapshot = await getSnapshot(server.name);
+
+          // Push notification
+          await sendPushToAll({
+            title: `Servidor ${server.name} inacessível`,
+            body: `Não foi possível conectar após 2 tentativas.`,
+            tag: `error-${server.name}`,
+          });
+
           if (webhookUrl) {
-            const previousSnapshot = await getSnapshot(server.name);
             try {
               await fetch(webhookUrl, {
                 method: "POST",
@@ -134,18 +143,25 @@ export async function GET(request: NextRequest) {
           }
 
           if (disconnectedIds.length > 20) {
+            // Buscar os números das instâncias desconectadas
+            const disconnectedInstances = disconnectedIds.map((id) => {
+              const inst = previousSnapshot.instances.find(
+                (i) => (i.id || i.name) === id
+              );
+              return inst ? getInstanceNumber(inst) : id;
+            });
+
+            // Push notification
+            await sendPushToAll({
+              title: `Alerta: ${server.name}`,
+              body: `${disconnectedIds.length} instâncias desconectaram. Conectadas agora: ${connected.length}/${instances.length}`,
+              tag: `disconnect-${server.name}`,
+            });
+
             // Disparar webhook
             const webhookUrl = await getWebhookUrl();
 
             if (webhookUrl) {
-              // Buscar os números das instâncias desconectadas
-              const disconnectedInstances = disconnectedIds.map((id) => {
-                const inst = previousSnapshot.instances.find(
-                  (i) => (i.id || i.name) === id
-                );
-                return inst ? getInstanceNumber(inst) : id;
-              });
-
               const alert: WebhookAlert = {
                 server: server.name,
                 disconnected_count: disconnectedIds.length,

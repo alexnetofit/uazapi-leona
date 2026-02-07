@@ -6,6 +6,7 @@ import ServerCard from "@/components/ServerCard";
 import AddServerModal from "@/components/AddServerModal";
 import SearchBar from "@/components/SearchBar";
 import WebhookConfig from "@/components/WebhookConfig";
+import PushNotification from "@/components/PushNotification";
 import { DashboardData } from "@/lib/types";
 
 const POLL_INTERVAL_SECONDS = 120; // 2 minutos
@@ -359,6 +360,9 @@ export default function Home() {
         onClose={() => setShowAddModal(false)}
         onAdd={handleAddServer}
       />
+
+      {/* Banner de Push Notification */}
+      <PushNotification />
     </div>
   );
 }

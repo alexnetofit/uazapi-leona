@@ -133,3 +133,40 @@ export async function setLastPoll(timestamp: string): Promise<void> {
   const redis = getRedis();
   await redis.set(LAST_POLL_KEY, timestamp);
 }
+
+// --- Push Subscriptions ---
+
+const PUSH_SUBS_KEY = "uazapi:push_subscriptions";
+
+export interface PushSubscriptionData {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+}
+
+export async function getPushSubscriptions(): Promise<PushSubscriptionData[]> {
+  if (!isRedisConfigured()) return [];
+  const redis = getRedis();
+  const data = await redis.get<PushSubscriptionData[]>(PUSH_SUBS_KEY);
+  return data || [];
+}
+
+export async function addPushSubscription(sub: PushSubscriptionData): Promise<void> {
+  const redis = getRedis();
+  const subs = await getPushSubscriptions();
+  // Evitar duplicatas pelo endpoint
+  const exists = subs.find((s) => s.endpoint === sub.endpoint);
+  if (!exists) {
+    subs.push(sub);
+    await redis.set(PUSH_SUBS_KEY, subs);
+  }
+}
+
+export async function removePushSubscription(endpoint: string): Promise<void> {
+  const redis = getRedis();
+  const subs = await getPushSubscriptions();
+  const filtered = subs.filter((s) => s.endpoint !== endpoint);
+  await redis.set(PUSH_SUBS_KEY, filtered);
+}
