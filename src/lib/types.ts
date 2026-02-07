@@ -6,10 +6,19 @@ export interface Server {
 export interface Instance {
   id: string;
   name: string;
-  connectionStatus: string;
-  ownerJid: string;
+  status: string;
+  owner: string;
   profilePicUrl?: string;
   profileName?: string;
+  token?: string;
+  paircode?: string;
+  qrcode?: string;
+  isBusiness?: boolean;
+  plataform?: string;
+  systemName?: string;
+  current_presence?: string;
+  lastDisconnect?: string;
+  lastDisconnectReason?: string;
   [key: string]: unknown;
 }
 

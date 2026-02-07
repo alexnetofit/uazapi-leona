@@ -42,12 +42,10 @@ export async function fetchAllInstances(
 }
 
 export function isConnected(instance: Instance): boolean {
-  const status = (instance.connectionStatus || "").toLowerCase();
-  return status === "open" || status === "connected";
+  const status = (instance.status || "").toLowerCase();
+  return status === "connected";
 }
 
 export function getInstanceNumber(instance: Instance): string {
-  // ownerJid geralmente é no formato "5511999999999@s.whatsapp.net"
-  const jid = instance.ownerJid || instance.name || "";
-  return jid.replace(/@.*$/, "");
+  return instance.owner || instance.name || "";
 }
