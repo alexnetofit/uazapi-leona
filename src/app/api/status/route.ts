@@ -1,52 +1,44 @@
 import { NextResponse } from "next/server";
-import { getServers, getAllSnapshots, getLastPoll, getPreviousCount } from "@/lib/kv";
+import { getDashboardData } from "@/lib/kv";
 import { DashboardData, ServerDashboard } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const [servers, snapshots, lastPoll] = await Promise.all([
-      getServers(),
-      getAllSnapshots(),
-      getLastPoll(),
-    ]);
+    const { servers, snapshots, previousCounts, lastPoll } =
+      await getDashboardData();
 
-    // Mapa de snapshots por nome do servidor
     const snapshotMap = new Map(snapshots.map((s) => [s.serverName, s]));
 
-    // Incluir TODOS os servidores cadastrados, mesmo sem snapshot
-    const serversData: ServerDashboard[] = await Promise.all(
-      servers.map(async (server) => {
-        const snapshot = snapshotMap.get(server.name);
-        const previous = await getPreviousCount(server.name);
+    const serversData: ServerDashboard[] = servers.map((server) => {
+      const snapshot = snapshotMap.get(server.name);
+      const previous = previousCounts.get(server.name) ?? null;
 
-        if (snapshot) {
-          return {
-            serverName: snapshot.serverName,
-            totalInstances: snapshot.totalInstances,
-            connectedInstances: snapshot.connectedInstances,
-            disconnectedInstances: snapshot.disconnectedInstances,
-            timestamp: snapshot.timestamp,
-            previous,
-            instances: [],
-            error: false,
-          };
-        }
-
-        // Servidor sem snapshot (nunca conseguiu conectar)
+      if (snapshot) {
         return {
-          serverName: server.name,
-          totalInstances: 0,
-          connectedInstances: 0,
-          disconnectedInstances: 0,
-          timestamp: "",
-          previous: null,
+          serverName: snapshot.serverName,
+          totalInstances: snapshot.totalInstances,
+          connectedInstances: snapshot.connectedInstances,
+          disconnectedInstances: snapshot.disconnectedInstances,
+          timestamp: snapshot.timestamp,
+          previous,
           instances: [],
-          error: true,
+          error: false,
         };
-      })
-    );
+      }
+
+      return {
+        serverName: server.name,
+        totalInstances: 0,
+        connectedInstances: 0,
+        disconnectedInstances: 0,
+        timestamp: "",
+        previous: null,
+        instances: [],
+        error: true,
+      };
+    });
 
     const totalInstances = snapshots.reduce(
       (sum, s) => sum + s.totalInstances,

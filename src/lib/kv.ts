@@ -93,17 +93,52 @@ export async function getPreviousCount(
 }
 
 export async function getAllSnapshots(): Promise<ServerSnapshot[]> {
+  if (!isRedisConfigured()) return [];
   const servers = await getServers();
-  const snapshots: ServerSnapshot[] = [];
+  if (servers.length === 0) return [];
 
-  for (const server of servers) {
-    const snapshot = await getSnapshot(server.name);
-    if (snapshot) {
-      snapshots.push(snapshot);
-    }
+  const redis = getRedis();
+  const keys = servers.map((s) => `${SNAPSHOT_PREFIX}${s.name}`);
+  const results = await redis.mget<(ServerSnapshot | null)[]>(...keys);
+
+  return results.filter((s): s is ServerSnapshot => s !== null);
+}
+
+export async function getDashboardData(): Promise<{
+  servers: Server[];
+  snapshots: ServerSnapshot[];
+  previousCounts: Map<string, PreviousCount | null>;
+  lastPoll: string | null;
+}> {
+  if (!isRedisConfigured()) {
+    return { servers: [], snapshots: [], previousCounts: new Map(), lastPoll: null };
   }
 
-  return snapshots;
+  const redis = getRedis();
+  const servers = await redis.get<Server[]>(SERVERS_KEY) || [];
+
+  if (servers.length === 0) {
+    const lastPoll = await redis.get<string>(LAST_POLL_KEY) || null;
+    return { servers: [], snapshots: [], previousCounts: new Map(), lastPoll };
+  }
+
+  const snapshotKeys = servers.map((s) => `${SNAPSHOT_PREFIX}${s.name}`);
+  const previousKeys = servers.map((s) => `${PREVIOUS_PREFIX}${s.name}`);
+
+  const [snapResults, prevResults, lastPoll] = await Promise.all([
+    redis.mget<(ServerSnapshot | null)[]>(...snapshotKeys),
+    redis.mget<(PreviousCount | null)[]>(...previousKeys),
+    redis.get<string>(LAST_POLL_KEY),
+  ]);
+
+  const snapshots = snapResults.filter((s): s is ServerSnapshot => s !== null);
+
+  const previousCounts = new Map<string, PreviousCount | null>();
+  servers.forEach((server, i) => {
+    previousCounts.set(server.name, prevResults[i] || null);
+  });
+
+  return { servers, snapshots, previousCounts, lastPoll: lastPoll || null };
 }
 
 // --- Webhook ---
