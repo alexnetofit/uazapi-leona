@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServers, getSnapshot, saveSnapshot, getWebhookUrl, setLastPoll } from "@/lib/kv";
-import { fetchAllInstances, isConnected, getInstanceNumber } from "@/lib/uazapi";
+import { fetchServerStatus, fetchAllInstances, isConnected, getInstanceNumber } from "@/lib/uazapi";
 import { sendPushToAll } from "@/lib/push";
 import { ServerSnapshot, WebhookAlert } from "@/lib/types";
 
-export const maxDuration = 60; // Máximo de 60s para o cron
+export const maxDuration = 60;
 
 export async function GET(request: NextRequest) {
-  // Proteger endpoint com CRON_SECRET apenas quando configurado
-  // Permite chamadas internas (mesmo origin) sem autenticação
   const cronSecret = process.env.CRON_SECRET;
 
   if (cronSecret) {
@@ -36,30 +34,28 @@ export async function GET(request: NextRequest) {
 
     for (const server of servers) {
       try {
-        // Buscar instâncias com retry: tenta 2x antes de considerar erro
-        let instances;
-        let fetchError: unknown = null;
+        // 1) Health check leve via /status
+        let serverStatus;
+        let statusError: unknown = null;
 
         for (let attempt = 1; attempt <= 2; attempt++) {
           try {
-            instances = await fetchAllInstances(server.name, server.token);
-            fetchError = null;
+            serverStatus = await fetchServerStatus(server.name);
+            statusError = null;
             break;
           } catch (err) {
-            fetchError = err;
+            statusError = err;
             console.error(
-              `Tentativa ${attempt}/2 falhou para ${server.name}:`,
+              `Tentativa ${attempt}/2 /status falhou para ${server.name}:`,
               err
             );
             if (attempt < 2) {
-              // Esperar 3s antes de tentar novamente
               await new Promise((r) => setTimeout(r, 3000));
             }
           }
         }
 
-        // Se ambas tentativas falharam, disparar webhook de erro e pular servidor
-        if (fetchError || !instances) {
+        if (statusError || !serverStatus) {
           console.error(
             `Servidor ${server.name} inacessível após 2 tentativas`
           );
@@ -67,7 +63,6 @@ export async function GET(request: NextRequest) {
           const webhookUrl = await getWebhookUrl();
           const previousSnapshot = await getSnapshot(server.name);
 
-          // Push notification
           await sendPushToAll({
             title: `Servidor ${server.name} inacessível`,
             body: `Não foi possível conectar após 2 tentativas.`,
@@ -83,7 +78,7 @@ export async function GET(request: NextRequest) {
                   server: server.name,
                   type: "server_error",
                   message: `Servidor ${server.name} inacessível após 2 tentativas`,
-                  error: fetchError instanceof Error ? fetchError.message : String(fetchError),
+                  error: statusError instanceof Error ? statusError.message : String(statusError),
                   timestamp: new Date().toISOString(),
                   last_known_total: previousSnapshot?.totalInstances ?? null,
                   last_known_connected: previousSnapshot?.connectedInstances ?? null,
@@ -97,78 +92,86 @@ export async function GET(request: NextRequest) {
             }
           }
 
-          results.push({
-            server: server.name,
-            status: "error",
-            alert: true,
-          });
+          results.push({ server: server.name, status: "error", alert: true });
           continue;
         }
 
-        const connected = instances.filter(isConnected);
-        const now = new Date().toISOString();
+        // 2) Servidor não saudável — alertar sem gastar /instance/all
+        if (!serverStatus.isHealthy) {
+          const previousSnapshot = await getSnapshot(server.name);
 
-        const newSnapshot: ServerSnapshot = {
-          serverName: server.name,
-          instances,
-          totalInstances: instances.length,
-          connectedInstances: connected.length,
-          disconnectedInstances: instances.length - connected.length,
-          timestamp: now,
-        };
+          await sendPushToAll({
+            title: `Servidor ${server.name} não saudável`,
+            body: `Health check falhou. Conectadas: ${serverStatus.totalInstances}`,
+            tag: `unhealthy-${server.name}`,
+          });
 
-        // Buscar snapshot anterior para comparação
-        const previousSnapshot = await getSnapshot(server.name);
-
-        let alertTriggered = false;
-
-        if (previousSnapshot) {
-          // Encontrar instâncias que eram conectadas e agora não são mais
-          const previousConnectedIds = new Set(
-            previousSnapshot.instances
-              .filter(isConnected)
-              .map((inst) => inst.id || inst.name)
-          );
-
-          const currentConnectedIds = new Set(
-            connected.map((inst) => inst.id || inst.name)
-          );
-
-          // Instâncias que estavam conectadas e agora desconectaram
-          const disconnectedIds: string[] = [];
-          for (const id of previousConnectedIds) {
-            if (!currentConnectedIds.has(id)) {
-              disconnectedIds.push(id);
+          const webhookUrl = await getWebhookUrl();
+          if (webhookUrl) {
+            try {
+              await fetch(webhookUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  server: server.name,
+                  type: "server_unhealthy",
+                  message: `Servidor ${server.name} não saudável`,
+                  connected_now: serverStatus.totalInstances,
+                  timestamp: new Date().toISOString(),
+                  last_known_total: previousSnapshot?.totalInstances ?? null,
+                  last_known_connected: previousSnapshot?.connectedInstances ?? null,
+                }),
+              });
+            } catch (webhookError) {
+              console.error(
+                `Erro ao enviar webhook unhealthy para ${server.name}:`,
+                webhookError
+              );
             }
           }
 
-          if (disconnectedIds.length > 20) {
-            // Buscar os números das instâncias desconectadas
-            const disconnectedInstances = disconnectedIds.map((id) => {
-              const inst = previousSnapshot.instances.find(
-                (i) => (i.id || i.name) === id
-              );
-              return inst ? getInstanceNumber(inst) : id;
-            });
+          results.push({ server: server.name, status: "unhealthy", alert: true });
+          continue;
+        }
 
-            // Push notification
+        // 3) Saudável — /status já trouxe conectadas, agora buscar total via /instance/all
+        const connectedInstances = serverStatus.totalInstances;
+        const now = new Date().toISOString();
+
+        let totalInstances = connectedInstances;
+        try {
+          const instances = await fetchAllInstances(server.name, server.token);
+          totalInstances = instances.length;
+        } catch (err) {
+          console.error(
+            `Falha ao buscar /instance/all para ${server.name}, usando connected como total:`,
+            err
+          );
+        }
+
+        const previousSnapshot = await getSnapshot(server.name);
+        let alertTriggered = false;
+
+        if (previousSnapshot) {
+          const droppedCount =
+            previousSnapshot.connectedInstances - connectedInstances;
+
+          if (droppedCount > 20) {
             await sendPushToAll({
               title: `Alerta: ${server.name}`,
-              body: `${disconnectedIds.length} instâncias desconectaram. Conectadas agora: ${connected.length}/${instances.length}`,
+              body: `${droppedCount} instâncias desconectaram. Conectadas agora: ${connectedInstances}/${totalInstances}`,
               tag: `disconnect-${server.name}`,
             });
 
-            // Disparar webhook
             const webhookUrl = await getWebhookUrl();
-
             if (webhookUrl) {
               const alert: WebhookAlert = {
                 server: server.name,
-                disconnected_count: disconnectedIds.length,
-                disconnected_instances: disconnectedInstances,
+                disconnected_count: droppedCount,
+                disconnected_instances: [],
                 timestamp: now,
-                total_instances: instances.length,
-                connected_now: connected.length,
+                total_instances: totalInstances,
+                connected_now: connectedInstances,
               };
 
               try {
@@ -188,7 +191,15 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        // Salvar novo snapshot
+        const newSnapshot: ServerSnapshot = {
+          serverName: server.name,
+          instances: [],
+          totalInstances,
+          connectedInstances,
+          disconnectedInstances: totalInstances - connectedInstances,
+          timestamp: now,
+        };
+
         await saveSnapshot(newSnapshot);
 
         results.push({
@@ -201,14 +212,10 @@ export async function GET(request: NextRequest) {
           `Erro ao consultar servidor ${server.name}:`,
           serverError
         );
-        results.push({
-          server: server.name,
-          status: "error",
-        });
+        results.push({ server: server.name, status: "error" });
       }
     }
 
-    // Atualizar timestamp do último poll
     await setLastPoll(new Date().toISOString());
 
     return NextResponse.json({

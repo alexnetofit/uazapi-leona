@@ -1,5 +1,41 @@
 import { Instance } from "./types";
 
+export interface ServerStatus {
+  isHealthy: boolean;
+  totalInstances: number;
+  serverStatus: string;
+  lastCheck: string;
+}
+
+export async function fetchServerStatus(
+  serverName: string
+): Promise<ServerStatus> {
+  const url = `https://${serverName}.uazapi.com/status`;
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Erro ao buscar status do servidor ${serverName}: ${response.status} ${response.statusText}`
+    );
+  }
+
+  const data = await response.json();
+  const status = data?.status || {};
+  const checked = status.checked_instance || {};
+
+  return {
+    isHealthy: checked.is_healthy === true,
+    totalInstances: status.total_instances ?? 0,
+    serverStatus: status.server_status || "unknown",
+    lastCheck: status.last_check || new Date().toISOString(),
+  };
+}
+
 export async function fetchAllInstances(
   serverName: string,
   adminToken: string
