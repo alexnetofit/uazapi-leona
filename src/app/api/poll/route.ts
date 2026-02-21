@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
 
           await sendPushToAll({
             title: `Servidor ${server.name} não saudável`,
-            body: `Health check falhou. Conectadas: ${serverStatus.totalInstances}`,
+            body: `Health check falhou. Conectadas: ${serverStatus.connectedInstances}`,
             tag: `unhealthy-${server.name}`,
           });
 
@@ -116,7 +116,7 @@ export async function GET(request: NextRequest) {
                   server: server.name,
                   type: "server_unhealthy",
                   message: `Servidor ${server.name} não saudável`,
-                  connected_now: serverStatus.totalInstances,
+                  connected_now: serverStatus.connectedInstances,
                   timestamp: new Date().toISOString(),
                   last_known_total: previousSnapshot?.totalInstances ?? null,
                   last_known_connected: previousSnapshot?.connectedInstances ?? null,
@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
         }
 
         // 3) Saudável — /status já trouxe conectadas, agora buscar total via /instance/all
-        const connectedInstances = serverStatus.totalInstances;
+        const connectedInstances = serverStatus.connectedInstances;
         const now = new Date().toISOString();
 
         let totalInstances = connectedInstances;

@@ -2,7 +2,7 @@ import { Instance } from "./types";
 
 export interface ServerStatus {
   isHealthy: boolean;
-  totalInstances: number;
+  connectedInstances: number;
   serverStatus: string;
   lastCheck: string;
 }
@@ -25,14 +25,36 @@ export async function fetchServerStatus(
   }
 
   const data = await response.json();
-  const status = data?.status || {};
-  const checked = status.checked_instance || {};
+
+  // Formato 1: servidor com instâncias conectadas
+  // { status: { checked_instance: { is_healthy: true }, total_instances: 146, server_status: "running" } }
+  if (data?.status && typeof data.status === "object") {
+    const status = data.status;
+    const checked = status.checked_instance || {};
+    return {
+      isHealthy: checked.is_healthy === true,
+      connectedInstances: status.total_instances ?? 0,
+      serverStatus: status.server_status || "running",
+      lastCheck: status.last_check || new Date().toISOString(),
+    };
+  }
+
+  // Formato 2: servidor de pé mas sem instâncias conectadas
+  // { connected_instances: 0, status: "warning", info: "Server is up but no instances connected" }
+  if (data?.status === "warning" || data?.connected_instances !== undefined) {
+    return {
+      isHealthy: true,
+      connectedInstances: data.connected_instances ?? 0,
+      serverStatus: "running",
+      lastCheck: new Date().toISOString(),
+    };
+  }
 
   return {
-    isHealthy: checked.is_healthy === true,
-    totalInstances: status.total_instances ?? 0,
-    serverStatus: status.server_status || "unknown",
-    lastCheck: status.last_check || new Date().toISOString(),
+    isHealthy: false,
+    connectedInstances: 0,
+    serverStatus: "unknown",
+    lastCheck: new Date().toISOString(),
   };
 }
 
