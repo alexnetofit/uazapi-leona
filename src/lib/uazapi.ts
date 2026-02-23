@@ -5,6 +5,7 @@ export interface ServerStatus {
   connectedInstances: number;
   serverStatus: string;
   lastCheck: string;
+  dc: string;
 }
 
 export async function fetchServerStatus(
@@ -36,6 +37,7 @@ export async function fetchServerStatus(
       connectedInstances: status.total_instances ?? 0,
       serverStatus: status.server_status || "running",
       lastCheck: status.last_check || new Date().toISOString(),
+      dc: status.dc || "",
     };
   }
 
@@ -47,6 +49,7 @@ export async function fetchServerStatus(
       connectedInstances: data.connected_instances ?? 0,
       serverStatus: "running",
       lastCheck: new Date().toISOString(),
+      dc: data.dc || "",
     };
   }
 
@@ -55,6 +58,7 @@ export async function fetchServerStatus(
     connectedInstances: 0,
     serverStatus: "unknown",
     lastCheck: new Date().toISOString(),
+    dc: "",
   };
 }
 

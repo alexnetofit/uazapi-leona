@@ -302,6 +302,7 @@ export default function Home() {
                       timestamp={server.timestamp}
                       previous={server.previous ?? null}
                       error={server.error}
+                      dc={server.dc}
                       onRemove={handleRemoveServer}
                     />
                   ))}

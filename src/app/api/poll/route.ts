@@ -199,6 +199,7 @@ export async function GET(request: NextRequest) {
             connectedInstances,
             disconnectedInstances: totalInstances - connectedInstances,
             timestamp: now,
+            dc: serverStatus.dc,
           };
 
           await saveSnapshot(newSnapshot);

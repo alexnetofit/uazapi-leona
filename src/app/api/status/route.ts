@@ -25,6 +25,7 @@ export async function GET() {
           previous,
           instances: [],
           error: false,
+          dc: snapshot.dc || "",
         };
       }
 

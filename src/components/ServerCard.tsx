@@ -10,6 +10,7 @@ interface ServerCardProps {
   timestamp: string;
   previous: PreviousCount | null;
   error?: boolean;
+  dc?: string;
   onRemove: (name: string) => void;
 }
 
@@ -40,6 +41,7 @@ export default function ServerCard({
   timestamp,
   previous,
   error,
+  dc,
   onRemove,
 }: ServerCardProps) {
   const formatDate = (iso: string) => {
@@ -69,6 +71,11 @@ export default function ServerCard({
           <h3 className="text-sm sm:text-base font-semibold text-zinc-100">
             {serverName}
           </h3>
+          {dc && (
+            <span className="text-[10px] font-medium text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded">
+              {dc.toUpperCase()}
+            </span>
+          )}
         </div>
         <button
           onClick={() => {

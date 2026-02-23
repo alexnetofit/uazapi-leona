@@ -29,6 +29,7 @@ export interface ServerSnapshot {
   connectedInstances: number;
   disconnectedInstances: number;
   timestamp: string;
+  dc?: string;
 }
 
 export interface PreviousCount {
@@ -47,6 +48,7 @@ export interface ServerDashboard {
   previous: PreviousCount | null;
   instances: Instance[];
   error?: boolean;
+  dc?: string;
 }
 
 export interface DashboardData {
