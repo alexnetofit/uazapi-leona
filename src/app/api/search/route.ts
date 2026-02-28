@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
             let safeInstance: Partial<Instance> = instance;
 
             if (role !== "admin") {
-              const { token, paircode, qrcode, ...rest } = instance;
+              const { token, paircode, qrcode, id, ...rest } = instance;
               safeInstance = rest;
             }
 

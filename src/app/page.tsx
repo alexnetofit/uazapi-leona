@@ -238,18 +238,20 @@ export default function Home() {
                 {formatCountdown(countdown)}
               </div>
 
-              <button
-                onClick={manualPoll}
-                disabled={loading}
-                className="p-1.5 sm:px-3 sm:py-1.5 rounded-lg text-[10px] sm:text-xs bg-zinc-800 text-zinc-400 hover:bg-zinc-700 disabled:opacity-50 transition-colors"
-                title="Atualizar agora"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:hidden">
-                  <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
-                  <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
-                </svg>
-                <span className="hidden sm:inline">{loading ? "..." : "Atualizar"}</span>
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={manualPoll}
+                  disabled={loading}
+                  className="p-1.5 sm:px-3 sm:py-1.5 rounded-lg text-[10px] sm:text-xs bg-zinc-800 text-zinc-400 hover:bg-zinc-700 disabled:opacity-50 transition-colors"
+                  title="Atualizar agora"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:hidden">
+                    <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+                    <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+                  </svg>
+                  <span className="hidden sm:inline">{loading ? "..." : "Atualizar"}</span>
+                </button>
+              )}
 
               <button
                 onClick={() => setShowLogs(true)}
