@@ -73,3 +73,12 @@ export interface SearchResult {
   server?: string;
   instance?: Instance;
 }
+
+export interface NotificationLog {
+  id: string;
+  type: "server_error" | "server_unhealthy" | "disconnect_alert";
+  server: string;
+  message: string;
+  timestamp: string;
+  details?: Record<string, unknown>;
+}

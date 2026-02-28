@@ -1,5 +1,5 @@
 import { Redis } from "@upstash/redis";
-import { Server, ServerSnapshot, PreviousCount } from "./types";
+import { Server, ServerSnapshot, PreviousCount, NotificationLog } from "./types";
 
 const SERVERS_KEY = "uazapi:servers";
 const SNAPSHOT_PREFIX = "uazapi:snapshot:";
@@ -167,6 +167,33 @@ export async function getLastPoll(): Promise<string | null> {
 export async function setLastPoll(timestamp: string): Promise<void> {
   const redis = getRedis();
   await redis.set(LAST_POLL_KEY, timestamp);
+}
+
+// --- Notification Logs ---
+
+const LOGS_KEY = "uazapi:notification_logs";
+const MAX_LOGS = 100;
+
+export async function saveLog(log: NotificationLog): Promise<void> {
+  if (!isRedisConfigured()) return;
+  const redis = getRedis();
+  const logs = await redis.get<NotificationLog[]>(LOGS_KEY) || [];
+  logs.unshift(log);
+  if (logs.length > MAX_LOGS) logs.length = MAX_LOGS;
+  await redis.set(LOGS_KEY, logs);
+}
+
+export async function getLogs(): Promise<NotificationLog[]> {
+  if (!isRedisConfigured()) return [];
+  const redis = getRedis();
+  const logs = await redis.get<NotificationLog[]>(LOGS_KEY) || [];
+  return logs;
+}
+
+export async function clearLogs(): Promise<void> {
+  if (!isRedisConfigured()) return;
+  const redis = getRedis();
+  await redis.del(LOGS_KEY);
 }
 
 // --- Push Subscriptions ---

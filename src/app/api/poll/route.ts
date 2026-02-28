@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServers, getSnapshot, saveSnapshot, getWebhookUrl, setLastPoll } from "@/lib/kv";
+import { getServers, getSnapshot, saveSnapshot, getWebhookUrl, setLastPoll, saveLog } from "@/lib/kv";
 import { fetchServerStatus, fetchAllInstances, isConnected, getInstanceNumber } from "@/lib/uazapi";
 import { sendPushToAll } from "@/lib/push";
 import { ServerSnapshot, WebhookAlert } from "@/lib/types";
@@ -93,6 +93,19 @@ export async function GET(request: NextRequest) {
               }
             }
 
+            await saveLog({
+              id: `${Date.now()}-${server.name}-error`,
+              type: "server_error",
+              server: server.name,
+              message: `Servidor inacessível após 2 tentativas`,
+              timestamp: new Date().toISOString(),
+              details: {
+                error: statusError instanceof Error ? statusError.message : String(statusError),
+                last_known_total: previousSnapshot?.totalInstances ?? null,
+                last_known_connected: previousSnapshot?.connectedInstances ?? null,
+              },
+            });
+
             return { server: server.name, status: "error" as const, alert: true };
           }
 
@@ -129,6 +142,19 @@ export async function GET(request: NextRequest) {
                 );
               }
             }
+
+            await saveLog({
+              id: `${Date.now()}-${server.name}-unhealthy`,
+              type: "server_unhealthy",
+              server: server.name,
+              message: `Health check falhou. Conectadas: ${serverStatus.connectedInstances}`,
+              timestamp: new Date().toISOString(),
+              details: {
+                connected_now: serverStatus.connectedInstances,
+                last_known_total: previousSnapshot?.totalInstances ?? null,
+                last_known_connected: previousSnapshot?.connectedInstances ?? null,
+              },
+            });
 
             return { server: server.name, status: "unhealthy" as const, alert: true };
           }
@@ -190,6 +216,19 @@ export async function GET(request: NextRequest) {
                 }
               }
             }
+
+            await saveLog({
+              id: `${Date.now()}-${server.name}-disconnect`,
+              type: "disconnect_alert",
+              server: server.name,
+              message: `${droppedCount} instâncias desconectaram. Conectadas: ${connectedInstances}/${totalInstances}`,
+              timestamp: now,
+              details: {
+                disconnected_count: droppedCount,
+                connected_now: connectedInstances,
+                total_instances: totalInstances,
+              },
+            });
           }
 
           const newSnapshot: ServerSnapshot = {
