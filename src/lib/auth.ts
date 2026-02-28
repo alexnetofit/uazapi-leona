@@ -9,20 +9,34 @@ export interface AuthUser {
   role: UserRole;
 }
 
-const USERS: { email: string; password: string; role: UserRole }[] = [
-  { email: "uazapi@leona.com", password: "Leo020625#na", role: "admin" },
-  { email: "suporte@leona.com", password: "SuporteLeona@2026", role: "suporte" },
-];
+function getUsers(): { email: string; password: string; role: UserRole }[] {
+  return [
+    {
+      email: process.env.ADMIN_EMAIL || "admin@leona.com",
+      password: process.env.ADMIN_PASSWORD || "",
+      role: "admin",
+    },
+    {
+      email: process.env.SUPORTE_EMAIL || "suporte@leona.com",
+      password: process.env.SUPORTE_PASSWORD || "",
+      role: "suporte",
+    },
+  ];
+}
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "uazapi-leona-jwt-secret-key-2026"
+  process.env.JWT_SECRET || "change-me-in-production"
 );
 const COOKIE_NAME = "uazapi_session";
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 dias
 
 export function authenticate(email: string, password: string): AuthUser | null {
-  const user = USERS.find(
-    (u) => u.email.toLowerCase() === email.toLowerCase() && u.password === password
+  const users = getUsers();
+  const user = users.find(
+    (u) =>
+      u.password &&
+      u.email.toLowerCase() === email.toLowerCase() &&
+      u.password === password
   );
   if (!user) return null;
   return { email: user.email, role: user.role };
