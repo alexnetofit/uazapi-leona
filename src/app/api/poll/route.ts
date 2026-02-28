@@ -215,20 +215,20 @@ export async function GET(request: NextRequest) {
                   );
                 }
               }
-            }
 
-            await saveLog({
-              id: `${Date.now()}-${server.name}-disconnect`,
-              type: "disconnect_alert",
-              server: server.name,
-              message: `${droppedCount} instâncias desconectaram. Conectadas: ${connectedInstances}/${totalInstances}`,
-              timestamp: now,
-              details: {
-                disconnected_count: droppedCount,
-                connected_now: connectedInstances,
-                total_instances: totalInstances,
-              },
-            });
+              await saveLog({
+                id: `${Date.now()}-${server.name}-disconnect`,
+                type: "disconnect_alert",
+                server: server.name,
+                message: `${droppedCount} instâncias desconectaram. Conectadas: ${connectedInstances}/${totalInstances}`,
+                timestamp: now,
+                details: {
+                  disconnected_count: droppedCount,
+                  connected_now: connectedInstances,
+                  total_instances: totalInstances,
+                },
+              });
+            }
           }
 
           const newSnapshot: ServerSnapshot = {
