@@ -214,57 +214,26 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-zinc-950">
       <header className="bg-zinc-900 border-b border-zinc-800 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-4">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <div className="flex items-center gap-2 shrink-0">
               <div className="w-7 h-7 sm:w-8 sm:h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="white"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                  <path d="M8 21h8" />
-                  <path d="M12 17v4" />
+                  <path d="M8 21h8" /><path d="M12 17v4" />
                 </svg>
               </div>
-              <div>
-                <h1 className="text-sm sm:text-lg font-bold text-zinc-100 leading-tight">
-                  Gestão UAZAPI
-                </h1>
-                <p className="text-[10px] sm:text-xs text-zinc-400 hidden sm:block">
-                  Monitoramento de instâncias
-                </p>
+              <div className="hidden sm:block">
+                <h1 className="text-lg font-bold text-zinc-100 leading-tight">Gestão UAZAPI</h1>
+                <p className="text-xs text-zinc-400">Monitoramento de instâncias</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 sm:gap-3">
-              <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-zinc-400 bg-zinc-800 px-2 sm:px-3 py-1.5 rounded-lg">
-                <svg
-                  className="animate-spin h-3 w-3"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  style={{ animationDuration: "3s" }}
-                >
-                  <circle
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                    className="opacity-25"
-                  />
-                  <path
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                    className="opacity-75"
-                  />
+            <div className="flex items-center gap-1 sm:gap-3">
+              <div className="flex items-center gap-1 text-[10px] sm:text-xs text-zinc-400 bg-zinc-800 px-1.5 sm:px-3 py-1.5 rounded-lg">
+                <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none" style={{ animationDuration: "3s" }}>
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
+                  <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" />
                 </svg>
                 {formatCountdown(countdown)}
               </div>
@@ -272,34 +241,26 @@ export default function Home() {
               <button
                 onClick={manualPoll}
                 disabled={loading}
-                className="px-2 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs bg-zinc-800 text-zinc-400 hover:bg-zinc-700 disabled:opacity-50 transition-colors"
+                className="p-1.5 sm:px-3 sm:py-1.5 rounded-lg text-[10px] sm:text-xs bg-zinc-800 text-zinc-400 hover:bg-zinc-700 disabled:opacity-50 transition-colors"
                 title="Atualizar agora"
               >
-                {loading ? "..." : "Atualizar"}
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:hidden">
+                  <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+                  <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
+                </svg>
+                <span className="hidden sm:inline">{loading ? "..." : "Atualizar"}</span>
               </button>
 
               <button
                 onClick={() => setShowLogs(true)}
-                className="flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs bg-zinc-800 text-zinc-400 hover:bg-zinc-700 transition-colors"
+                className="p-1.5 sm:px-3 sm:py-1.5 rounded-lg text-[10px] sm:text-xs bg-zinc-800 text-zinc-400 hover:bg-zinc-700 transition-colors"
                 title="Logs de notificações"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
                   <polyline points="14 2 14 8 20 8" />
-                  <line x1="16" y1="13" x2="8" y2="13" />
-                  <line x1="16" y1="17" x2="8" y2="17" />
+                  <line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
                 </svg>
-                <span className="hidden sm:inline">Logs</span>
               </button>
 
               {isAdmin && <WebhookConfig />}
@@ -307,32 +268,24 @@ export default function Home() {
               {isAdmin && (
                 <button
                   onClick={() => setShowAddModal(true)}
-                  className="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-blue-600 text-white text-xs sm:text-sm font-medium hover:bg-blue-700 transition-colors whitespace-nowrap"
+                  className="p-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl bg-blue-600 text-white text-xs sm:text-sm font-medium hover:bg-blue-700 transition-colors"
+                  title="Adicionar servidor"
                 >
-                  <span className="sm:hidden">+</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="sm:hidden">
+                    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
                   <span className="hidden sm:inline">+ Servidor</span>
                 </button>
               )}
 
               <button
                 onClick={handleLogout}
-                className="px-2 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs bg-zinc-800 text-zinc-400 hover:text-red-400 hover:bg-zinc-700 transition-colors"
+                className="p-1.5 sm:px-3 sm:py-1.5 rounded-lg text-[10px] sm:text-xs bg-zinc-800 text-zinc-400 hover:text-red-400 hover:bg-zinc-700 transition-colors"
                 title="Sair"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
-                  <polyline points="16 17 21 12 16 7" />
-                  <line x1="21" y1="12" x2="9" y2="12" />
+                  <polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
                 </svg>
               </button>
             </div>
