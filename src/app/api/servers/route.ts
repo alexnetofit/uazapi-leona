@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServers, addServer, removeServer } from "@/lib/kv";
+import { requireAdmin } from "@/lib/api-auth";
 
 export async function GET() {
   try {
@@ -17,6 +18,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const denied = requireAdmin(request);
+  if (denied) return denied;
+
   try {
     const body = await request.json();
     const { name, token } = body;
@@ -49,6 +53,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const denied = requireAdmin(request);
+  if (denied) return denied;
+
   try {
     const { searchParams } = new URL(request.url);
     const name = searchParams.get("name");

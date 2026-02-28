@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLogs, clearLogs } from "@/lib/kv";
+import { requireAdmin } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,9 @@ export async function GET() {
 }
 
 export async function DELETE(request: NextRequest) {
+  const denied = requireAdmin(request);
+  if (denied) return denied;
+
   try {
     await clearLogs();
     return NextResponse.json({ success: true, message: "Logs limpos" });

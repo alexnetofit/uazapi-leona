@@ -27,9 +27,10 @@ const TYPE_CONFIG = {
 interface LogsPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  isAdmin?: boolean;
 }
 
-export default function LogsPanel({ isOpen, onClose }: LogsPanelProps) {
+export default function LogsPanel({ isOpen, onClose, isAdmin }: LogsPanelProps) {
   const [logs, setLogs] = useState<NotificationLog[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -113,7 +114,7 @@ export default function LogsPanel({ isOpen, onClose }: LogsPanelProps) {
             )}
           </div>
           <div className="flex items-center gap-2">
-            {logs.length > 0 && (
+            {isAdmin && logs.length > 0 && (
               <button
                 onClick={handleClear}
                 className="text-[10px] text-zinc-500 hover:text-red-400 transition-colors px-2 py-1 rounded hover:bg-zinc-800"

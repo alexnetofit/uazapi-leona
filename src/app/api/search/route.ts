@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServers } from "@/lib/kv";
 import { fetchAllInstances, getInstanceNumber } from "@/lib/uazapi";
-import { SearchResult } from "@/lib/types";
+import { SearchResult, Instance } from "@/lib/types";
+import { getUserRole } from "@/lib/api-auth";
 
 export const maxDuration = 60;
 
@@ -40,10 +41,18 @@ export async function GET(request: NextRequest) {
             instanceNumber.includes(searchTerm) ||
             instanceName.includes(searchTerm)
           ) {
+            const role = getUserRole(request);
+            let safeInstance: Partial<Instance> = instance;
+
+            if (role !== "admin") {
+              const { token, paircode, qrcode, ...rest } = instance;
+              safeInstance = rest;
+            }
+
             const result: SearchResult = {
               found: true,
               server: server.name,
-              instance,
+              instance: safeInstance as Instance,
             };
             return NextResponse.json(result);
           }

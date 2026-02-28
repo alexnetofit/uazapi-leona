@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWebhookUrl, setWebhookUrl } from "@/lib/kv";
+import { requireAdmin } from "@/lib/api-auth";
 
 export async function GET() {
   try {
@@ -15,6 +16,9 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
+  const denied = requireAdmin(request);
+  if (denied) return denied;
+
   try {
     const body = await request.json();
     const { url } = body;

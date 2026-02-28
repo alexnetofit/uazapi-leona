@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import TotalSummary from "@/components/TotalSummary";
 import ServerCard from "@/components/ServerCard";
 import AddServerModal from "@/components/AddServerModal";
@@ -9,8 +10,9 @@ import WebhookConfig from "@/components/WebhookConfig";
 import PushNotification from "@/components/PushNotification";
 import LogsPanel from "@/components/LogsPanel";
 import { DashboardData } from "@/lib/types";
+import { UserRole } from "@/lib/auth";
 
-const POLL_INTERVAL_SECONDS = 120; // 2 minutos
+const POLL_INTERVAL_SECONDS = 120;
 
 function calcSecondsUntilNextPoll(lastPoll: string | null): number {
   if (!lastPoll) return 0;
@@ -27,6 +29,28 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [countdown, setCountdown] = useState(POLL_INTERVAL_SECONDS);
   const [showLogs, setShowLogs] = useState(false);
+  const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const router = useRouter();
+
+  const isAdmin = userRole === "admin";
+
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.authenticated) {
+          setUserRole(data.user.role);
+        } else {
+          router.push("/login");
+        }
+      })
+      .catch(() => router.push("/login"));
+  }, [router]);
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+  };
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -105,11 +129,12 @@ export default function Home() {
   }, [fetchStatus, fetchServers, triggerPoll]);
 
   useEffect(() => {
-    loadData();
+    if (userRole) loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [userRole]);
 
   useEffect(() => {
+    if (!userRole) return;
     const interval = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 0) {
@@ -122,7 +147,7 @@ export default function Home() {
 
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [userRole]);
 
   const handleAddServer = async (name: string, token: string) => {
     const res = await fetch("/api/servers", {
@@ -160,9 +185,34 @@ export default function Home() {
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
+  if (!userRole) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <svg
+          className="animate-spin h-8 w-8 text-blue-600"
+          viewBox="0 0 24 24"
+          fill="none"
+        >
+          <circle
+            cx="12"
+            cy="12"
+            r="10"
+            stroke="currentColor"
+            strokeWidth="4"
+            className="opacity-25"
+          />
+          <path
+            fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+            className="opacity-75"
+          />
+        </svg>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950">
-      {/* Header */}
       <header className="bg-zinc-900 border-b border-zinc-800 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-4">
           <div className="flex items-center justify-between gap-2">
@@ -195,7 +245,6 @@ export default function Home() {
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-3">
-              {/* Countdown */}
               <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-zinc-400 bg-zinc-800 px-2 sm:px-3 py-1.5 rounded-lg">
                 <svg
                   className="animate-spin h-3 w-3"
@@ -253,21 +302,44 @@ export default function Home() {
                 <span className="hidden sm:inline">Logs</span>
               </button>
 
-              <WebhookConfig />
+              {isAdmin && <WebhookConfig />}
+
+              {isAdmin && (
+                <button
+                  onClick={() => setShowAddModal(true)}
+                  className="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-blue-600 text-white text-xs sm:text-sm font-medium hover:bg-blue-700 transition-colors whitespace-nowrap"
+                >
+                  <span className="sm:hidden">+</span>
+                  <span className="hidden sm:inline">+ Servidor</span>
+                </button>
+              )}
 
               <button
-                onClick={() => setShowAddModal(true)}
-                className="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-blue-600 text-white text-xs sm:text-sm font-medium hover:bg-blue-700 transition-colors whitespace-nowrap"
+                onClick={handleLogout}
+                className="px-2 sm:px-3 py-1.5 rounded-lg text-[10px] sm:text-xs bg-zinc-800 text-zinc-400 hover:text-red-400 hover:bg-zinc-700 transition-colors"
+                title="Sair"
               >
-                <span className="sm:hidden">+</span>
-                <span className="hidden sm:inline">+ Servidor</span>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+                  <polyline points="16 17 21 12 16 7" />
+                  <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
               </button>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
         {loading && !data ? (
           <div className="flex items-center justify-center py-20">
@@ -291,17 +363,13 @@ export default function Home() {
                   className="opacity-75"
                 />
               </svg>
-              <p className="text-zinc-400 text-sm">
-                Carregando dados...
-              </p>
+              <p className="text-zinc-400 text-sm">Carregando dados...</p>
             </div>
           </div>
         ) : (
           <>
-            {/* Busca */}
             <SearchBar />
 
-            {/* Resumo Geral */}
             {data && (
               <TotalSummary
                 totalInstances={data.totalInstances}
@@ -311,7 +379,6 @@ export default function Home() {
               />
             )}
 
-            {/* Cards dos Servidores */}
             {data && data.servers.length > 0 ? (
               <div>
                 <h2 className="text-base sm:text-lg font-semibold text-zinc-100 mb-3 sm:mb-4">
@@ -329,7 +396,7 @@ export default function Home() {
                       previous={server.previous ?? null}
                       error={server.error}
                       dc={server.dc}
-                      onRemove={handleRemoveServer}
+                      onRemove={isAdmin ? handleRemoveServer : undefined}
                     />
                   ))}
                 </div>
@@ -362,12 +429,14 @@ export default function Home() {
                   Adicione seu primeiro servidor UAZAPI para começar o
                   monitoramento.
                 </p>
-                <button
-                  onClick={() => setShowAddModal(true)}
-                  className="px-6 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors"
-                >
-                  Adicionar Servidor
-                </button>
+                {isAdmin && (
+                  <button
+                    onClick={() => setShowAddModal(true)}
+                    className="px-6 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    Adicionar Servidor
+                  </button>
+                )}
               </div>
             ) : (
               <div className="text-center py-12">
@@ -381,17 +450,16 @@ export default function Home() {
         )}
       </main>
 
-      {/* Modal Adicionar Servidor */}
-      <AddServerModal
-        isOpen={showAddModal}
-        onClose={() => setShowAddModal(false)}
-        onAdd={handleAddServer}
-      />
+      {isAdmin && (
+        <AddServerModal
+          isOpen={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          onAdd={handleAddServer}
+        />
+      )}
 
-      {/* Painel de Logs */}
-      <LogsPanel isOpen={showLogs} onClose={() => setShowLogs(false)} />
+      <LogsPanel isOpen={showLogs} onClose={() => setShowLogs(false)} isAdmin={isAdmin} />
 
-      {/* Banner de Push Notification */}
       <PushNotification />
     </div>
   );
