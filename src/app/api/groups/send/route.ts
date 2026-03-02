@@ -126,12 +126,12 @@ async function handleMedia(request: NextRequest) {
 
     if (!res.ok) {
       return NextResponse.json(
-        { error: "Erro ao enviar mídia", details: data },
+        { error: "Erro ao enviar mídia", details: data, blobUrl: blob.url, sentBody: body },
         { status: res.status }
       );
     }
 
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json({ success: true, data, blobUrl: blob.url, sentBody: body });
   } catch (error) {
     if (blobUrl) {
       await del(blobUrl).catch((err: unknown) =>

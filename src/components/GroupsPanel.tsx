@@ -31,6 +31,7 @@ export default function GroupsPanel({ isOpen, onClose }: GroupsPanelProps) {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<SendStatus>("idle");
   const [statusMessage, setStatusMessage] = useState("");
+  const [debugInfo, setDebugInfo] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const resetForm = () => {
@@ -78,6 +79,10 @@ export default function GroupsPanel({ isOpen, onClose }: GroupsPanelProps) {
       }
 
       const data = await res.json();
+
+      if (data.blobUrl || data.sentBody || data.details) {
+        setDebugInfo(JSON.stringify({ blobUrl: data.blobUrl, sentBody: data.sentBody, apiResponse: data.details || data.data }, null, 2));
+      }
 
       if (res.ok) {
         setStatus("success");
@@ -372,6 +377,16 @@ export default function GroupsPanel({ isOpen, onClose }: GroupsPanelProps) {
               }`}
             >
               {statusMessage}
+            </div>
+          )}
+
+          {/* Debug Info */}
+          {debugInfo && (
+            <div className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2">
+              <p className="text-[10px] text-zinc-400 font-medium mb-1 uppercase">Debug</p>
+              <pre className="text-[10px] text-zinc-300 whitespace-pre-wrap break-all font-mono leading-relaxed">
+                {debugInfo}
+              </pre>
             </div>
           )}
         </div>
