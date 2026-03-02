@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { put, del } from "@vercel/blob";
+import { put, del, list } from "@vercel/blob";
 import { requireAdmin } from "@/lib/api-auth";
 
 const GROUPS_API_URL =
@@ -73,9 +73,18 @@ async function handleText(request: NextRequest) {
   }
 }
 
-async function handleMedia(request: NextRequest) {
-  let blobUrl: string | null = null;
+async function cleanupPreviousBlobs() {
+  try {
+    const { blobs } = await list({ prefix: "groups/" });
+    if (blobs.length > 0) {
+      await del(blobs.map((b) => b.url));
+    }
+  } catch (err) {
+    console.error("Erro ao limpar blobs anteriores:", err);
+  }
+}
 
+async function handleMedia(request: NextRequest) {
   try {
     const formData = await request.formData();
     const group = formData.get("group") as string;
@@ -89,10 +98,11 @@ async function handleMedia(request: NextRequest) {
       );
     }
 
+    await cleanupPreviousBlobs();
+
     const blob = await put(`groups/${Date.now()}-${file.name}`, file, {
       access: "public",
     });
-    blobUrl = blob.url;
 
     const mediaType = detectMediaType(file.type);
 
@@ -100,7 +110,7 @@ async function handleMedia(request: NextRequest) {
       number: group,
       type: mediaType,
       async: true,
-      file: blobUrl,
+      file: blob.url,
     };
 
     if (caption.trim()) {
@@ -119,11 +129,6 @@ async function handleMedia(request: NextRequest) {
 
     const data = await res.json().catch(() => ({}));
 
-    await del(blobUrl).catch((err: unknown) =>
-      console.error("Erro ao deletar blob:", err)
-    );
-    blobUrl = null;
-
     if (!res.ok) {
       return NextResponse.json(
         { error: "Erro ao enviar mídia", details: data, blobUrl: blob.url, sentBody: body },
@@ -133,11 +138,6 @@ async function handleMedia(request: NextRequest) {
 
     return NextResponse.json({ success: true, data, blobUrl: blob.url, sentBody: body });
   } catch (error) {
-    if (blobUrl) {
-      await del(blobUrl).catch((err: unknown) =>
-        console.error("Erro ao deletar blob no cleanup:", err)
-      );
-    }
     console.error("Erro ao enviar mídia:", error);
     return NextResponse.json(
       { error: "Erro interno ao enviar mídia" },

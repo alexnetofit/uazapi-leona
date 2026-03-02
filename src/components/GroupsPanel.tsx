@@ -2,6 +2,8 @@
 
 import { useState, useRef } from "react";
 
+const OFFICIAL_GROUP_ID = "120363407196128260@g.us";
+
 const GROUPS = [
   {
     id: "120363406348891106@g.us",
@@ -9,7 +11,7 @@ const GROUPS = [
     description: "Grupo Suporte",
   },
   {
-    id: "120363407196128260@g.us",
+    id: OFFICIAL_GROUP_ID,
     label: "Disparo Oficial",
     description: "Grupo QG Leona Flow",
   },
@@ -42,6 +44,13 @@ export default function GroupsPanel({ isOpen, onClose }: GroupsPanelProps) {
   };
 
   const handleSend = async () => {
+    if (selectedGroup === OFFICIAL_GROUP_ID) {
+      const confirmed = confirm(
+        "⚠️ ATENÇÃO: Você está enviando para o GRUPO OFICIAL (QG Leona Flow).\n\nTem certeza que deseja enviar?"
+      );
+      if (!confirmed) return;
+    }
+
     setStatus("sending");
     setStatusMessage("");
 
