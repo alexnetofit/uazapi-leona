@@ -83,7 +83,10 @@ export default function GroupsPanel({ isOpen, onClose }: GroupsPanelProps) {
         setStatus("success");
         setStatusMessage("Mensagem enviada com sucesso!");
         resetForm();
-        setTimeout(() => setStatus("idle"), 3000);
+        setTimeout(() => {
+          setStatus("idle");
+          setStatusMessage("");
+        }, 3000);
       } else {
         setStatus("error");
         setStatusMessage(data.error || "Erro ao enviar mensagem");
