@@ -9,6 +9,7 @@ import SearchBar from "@/components/SearchBar";
 import WebhookConfig from "@/components/WebhookConfig";
 import PushNotification from "@/components/PushNotification";
 import LogsPanel from "@/components/LogsPanel";
+import GroupsPanel from "@/components/GroupsPanel";
 import { DashboardData } from "@/lib/types";
 import { UserRole } from "@/lib/auth";
 
@@ -29,6 +30,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [countdown, setCountdown] = useState(POLL_INTERVAL_SECONDS);
   const [showLogs, setShowLogs] = useState(false);
+  const [showGroups, setShowGroups] = useState(false);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const router = useRouter();
 
@@ -253,6 +255,21 @@ export default function Home() {
                 </button>
               )}
 
+              {isAdmin && (
+                <button
+                  onClick={() => setShowGroups(true)}
+                  className="p-2 sm:px-3 sm:py-2 rounded-lg text-xs bg-zinc-800 text-green-400 hover:bg-zinc-700 transition-colors"
+                  title="Envio para Grupos"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 00-3-3.87" />
+                    <path d="M16 3.13a4 4 0 010 7.75" />
+                  </svg>
+                </button>
+              )}
+
               <button
                 onClick={() => setShowLogs(true)}
                 className="p-2 sm:px-3 sm:py-2 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:bg-zinc-700 transition-colors"
@@ -414,6 +431,10 @@ export default function Home() {
       )}
 
       <LogsPanel isOpen={showLogs} onClose={() => setShowLogs(false)} isAdmin={isAdmin} />
+
+      {isAdmin && (
+        <GroupsPanel isOpen={showGroups} onClose={() => setShowGroups(false)} />
+      )}
 
       <PushNotification />
     </div>

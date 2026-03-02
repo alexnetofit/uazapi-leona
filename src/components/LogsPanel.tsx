@@ -204,28 +204,28 @@ export default function LogsPanel({ isOpen, onClose, isAdmin }: LogsPanelProps) 
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-1.5">
                         <div className={`w-1.5 h-1.5 rounded-full ${config.dot}`} />
-                        <span className={`text-[10px] font-medium ${config.color}`}>
+                        <span className={`text-[11px] font-semibold ${config.color}`}>
                           {config.label}
                         </span>
                       </div>
                       <span
-                        className="text-[10px] text-zinc-600"
+                        className="text-[11px] text-zinc-400"
                         title={formatDate(log.timestamp)}
                       >
                         {formatRelative(log.timestamp)}
                       </span>
                     </div>
-                    <p className="text-xs text-zinc-300 font-medium mb-0.5">
+                    <p className="text-sm text-zinc-100 font-medium mb-0.5">
                       {log.server}
                     </p>
-                    <p className="text-[11px] text-zinc-500">{log.message}</p>
+                    <p className="text-xs text-zinc-200">{log.message}</p>
                     {log.details && (
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
                         {Object.entries(log.details).map(([key, value]) =>
                           value !== null && value !== undefined ? (
                             <span
                               key={key}
-                              className="text-[9px] bg-zinc-800/80 text-zinc-500 px-1.5 py-0.5 rounded"
+                              className="text-[10px] bg-zinc-800/80 text-zinc-300 px-1.5 py-0.5 rounded"
                             >
                               {key}: {String(value)}
                             </span>
@@ -234,7 +234,7 @@ export default function LogsPanel({ isOpen, onClose, isAdmin }: LogsPanelProps) 
                       </div>
                     )}
                     <p
-                      className="text-[9px] text-zinc-700 mt-1"
+                      className="text-[10px] text-zinc-400 mt-1"
                       title={log.timestamp}
                     >
                       {formatDate(log.timestamp)}
