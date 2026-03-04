@@ -14,6 +14,10 @@ export default function SearchBar() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SearchResult | null>(null);
   const [error, setError] = useState("");
+  const [queuePosition, setQueuePosition] = useState<number | null>(null);
+  const [queueLoading, setQueueLoading] = useState(false);
+  const [delayLoading, setDelayLoading] = useState(false);
+  const [delayResult, setDelayResult] = useState<string>("");
 
   const handleSearch = async () => {
     if (query.trim().length < 4) {
@@ -23,6 +27,8 @@ export default function SearchBar() {
 
     setError("");
     setResult(null);
+    setQueuePosition(null);
+    setDelayResult("");
     setLoading(true);
 
     try {
@@ -41,6 +47,69 @@ export default function SearchBar() {
       setError("Erro ao conectar com o servidor");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCheckQueue = async () => {
+    if (!result?.found || !result.server || !result.instance) return;
+
+    const number = result.instance.owner || result.instance.name || "";
+    if (!number) return;
+
+    setQueueLoading(true);
+    setQueuePosition(null);
+    setDelayResult("");
+
+    try {
+      const res = await fetch("/api/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "check",
+          server: result.server,
+          number,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setQueuePosition(data.queuePosition ?? 0);
+      } else {
+        setError(data.error || "Erro ao verificar fila");
+      }
+    } catch {
+      setError("Erro ao conectar para verificar fila");
+    } finally {
+      setQueueLoading(false);
+    }
+  };
+
+  const handleReduceDelay = async () => {
+    if (!result?.found || !result.server) return;
+
+    setDelayLoading(true);
+    setDelayResult("");
+
+    try {
+      const res = await fetch("/api/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reduce-delay",
+          server: result.server,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setDelayResult("Delay reduzido com sucesso!");
+      } else {
+        setDelayResult(data.error || "Erro ao reduzir delay");
+      }
+    } catch {
+      setDelayResult("Erro ao conectar");
+    } finally {
+      setDelayLoading(false);
     }
   };
 
@@ -129,6 +198,39 @@ export default function SearchBar() {
                       </span>
                     </div>
                   ))}
+              </div>
+
+              {/* Queue Actions */}
+              <div className="mt-4 pt-3 border-t border-emerald-800/50 flex flex-wrap items-center gap-2">
+                <button
+                  onClick={handleCheckQueue}
+                  disabled={queueLoading}
+                  className="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-200 text-xs font-medium hover:bg-zinc-700 disabled:opacity-50 transition-colors"
+                >
+                  {queueLoading ? "Verificando..." : "Verificar Fila"}
+                </button>
+
+                {queuePosition !== null && (
+                  <>
+                    <span className="text-xs text-zinc-300">
+                      Fila: <strong className="text-amber-400">{queuePosition}</strong>
+                    </span>
+
+                    <button
+                      onClick={handleReduceDelay}
+                      disabled={delayLoading}
+                      className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                    >
+                      {delayLoading ? "Reduzindo..." : "Reduzir Delay"}
+                    </button>
+                  </>
+                )}
+
+                {delayResult && (
+                  <span className={`text-xs ${delayResult.includes("sucesso") ? "text-green-400" : "text-red-400"}`}>
+                    {delayResult}
+                  </span>
+                )}
               </div>
             </div>
           ) : (
