@@ -54,11 +54,16 @@ export default function SearchBar() {
     if (!result?.found || !result.server || !result.instance) return;
 
     const number = result.instance.owner || result.instance.name || "";
-    if (!number) return;
+    const instanceToken = result.instance.token || "";
+    if (!number || !instanceToken) {
+      setError("Token da instância não disponível");
+      return;
+    }
 
     setQueueLoading(true);
     setQueuePosition(null);
     setDelayResult("");
+    setError("");
 
     try {
       const res = await fetch("/api/queue", {
@@ -68,6 +73,7 @@ export default function SearchBar() {
           action: "check",
           server: result.server,
           number,
+          instanceToken,
         }),
       });
 
@@ -85,7 +91,13 @@ export default function SearchBar() {
   };
 
   const handleReduceDelay = async () => {
-    if (!result?.found || !result.server) return;
+    if (!result?.found || !result.server || !result.instance) return;
+
+    const instanceToken = result.instance.token || "";
+    if (!instanceToken) {
+      setError("Token da instância não disponível");
+      return;
+    }
 
     setDelayLoading(true);
     setDelayResult("");
@@ -97,6 +109,7 @@ export default function SearchBar() {
         body: JSON.stringify({
           action: "reduce-delay",
           server: result.server,
+          instanceToken,
         }),
       });
 
@@ -178,12 +191,22 @@ export default function SearchBar() {
         <div className="mt-4">
           {result.found ? (
             <div className="bg-emerald-950/20 border border-emerald-800 rounded-xl p-3 sm:p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                <span className="font-semibold text-emerald-300 text-sm sm:text-base">
-                  Encontrado no servidor: {result.server}
-                </span>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                  <span className="font-semibold text-emerald-300 text-sm sm:text-base">
+                    Encontrado no servidor: {result.server}
+                  </span>
+                </div>
+                <button
+                  onClick={handleCheckQueue}
+                  disabled={queueLoading}
+                  className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                >
+                  {queueLoading ? "Verificando..." : "Verificar Fila"}
+                </button>
               </div>
+
               <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm overflow-x-auto">
                 {result.instance &&
                   Object.entries(result.instance).map(([key, value]) => (
@@ -200,38 +223,26 @@ export default function SearchBar() {
                   ))}
               </div>
 
-              {/* Queue Actions */}
-              <div className="mt-4 pt-3 border-t border-emerald-800/50 flex flex-wrap items-center gap-2">
-                <button
-                  onClick={handleCheckQueue}
-                  disabled={queueLoading}
-                  className="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-200 text-xs font-medium hover:bg-zinc-700 disabled:opacity-50 transition-colors"
-                >
-                  {queueLoading ? "Verificando..." : "Verificar Fila"}
-                </button>
-
-                {queuePosition !== null && (
-                  <>
-                    <span className="text-xs text-zinc-300">
-                      Fila: <strong className="text-amber-400">{queuePosition}</strong>
-                    </span>
-
-                    <button
-                      onClick={handleReduceDelay}
-                      disabled={delayLoading}
-                      className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 disabled:opacity-50 transition-colors"
-                    >
-                      {delayLoading ? "Reduzindo..." : "Reduzir Delay"}
-                    </button>
-                  </>
-                )}
-
-                {delayResult && (
-                  <span className={`text-xs ${delayResult.includes("sucesso") ? "text-green-400" : "text-red-400"}`}>
-                    {delayResult}
+              {/* Queue Result */}
+              {queuePosition !== null && (
+                <div className="mt-3 pt-3 border-t border-emerald-800/50 flex flex-wrap items-center gap-3">
+                  <span className="text-sm text-zinc-200">
+                    Posição na fila: <strong className="text-amber-400 text-base">{queuePosition}</strong>
                   </span>
-                )}
-              </div>
+                  <button
+                    onClick={handleReduceDelay}
+                    disabled={delayLoading}
+                    className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                  >
+                    {delayLoading ? "Reduzindo..." : "Reduzir Delay"}
+                  </button>
+                  {delayResult && (
+                    <span className={`text-xs ${delayResult.includes("sucesso") ? "text-green-400" : "text-red-400"}`}>
+                      {delayResult}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
             <div className="bg-zinc-800/50 text-zinc-400 text-sm px-4 py-3 rounded-xl text-center">
