@@ -1,26 +1,55 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/api-auth";
+import { getServers } from "@/lib/kv";
+import { fetchAllInstances, getInstanceNumber } from "@/lib/uazapi";
+
+async function resolveInstanceToken(
+  serverName: string,
+  number: string
+): Promise<{ token: string; serverToken: string } | null> {
+  const servers = await getServers();
+  const srv = servers.find((s) => s.name === serverName);
+  if (!srv) return null;
+
+  const instances = await fetchAllInstances(srv.name, srv.token);
+  const instance = instances.find((inst) => {
+    const instNumber = getInstanceNumber(inst);
+    return instNumber.includes(number) || number.includes(instNumber);
+  });
+
+  if (!instance?.token) return null;
+  return { token: instance.token, serverToken: srv.token };
+}
 
 export async function POST(request: NextRequest) {
-  const denied = requireAdmin(request);
-  if (denied) return denied;
-
   try {
     const { action, server, number, instanceToken } = await request.json();
 
-    if (!server || !instanceToken) {
+    if (!server || !number) {
       return NextResponse.json(
-        { error: "Servidor e token da instância são obrigatórios" },
+        { error: "Servidor e número são obrigatórios" },
         { status: 400 }
       );
     }
 
+    let token = instanceToken;
+
+    if (!token) {
+      const resolved = await resolveInstanceToken(server, number);
+      if (!resolved) {
+        return NextResponse.json(
+          { error: "Instância não encontrada no servidor" },
+          { status: 404 }
+        );
+      }
+      token = resolved.token;
+    }
+
     if (action === "check") {
-      return handleCheckQueue(server, instanceToken, number);
+      return handleCheckQueue(server, token, number);
     }
 
     if (action === "reduce-delay") {
-      return handleReduceDelay(server, instanceToken);
+      return handleReduceDelay(server, token);
     }
 
     return NextResponse.json({ error: "Ação inválida" }, { status: 400 });
@@ -38,13 +67,6 @@ async function handleCheckQueue(
   instanceToken: string,
   number: string
 ) {
-  if (!number) {
-    return NextResponse.json(
-      { error: "Número é obrigatório" },
-      { status: 400 }
-    );
-  }
-
   const url = `https://${serverName}.uazapi.com/send/text`;
   const body = { number, text: "teste envio", async: true };
 

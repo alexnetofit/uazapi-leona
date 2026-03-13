@@ -60,9 +60,8 @@ export default function SearchBar() {
     if (!result?.found || !result.server || !result.instance) return;
 
     const number = result.instance.owner || result.instance.name || "";
-    const instanceToken = result.instance.token || "";
-    if (!number || !instanceToken) {
-      setError("Token da instância não disponível");
+    if (!number) {
+      setError("Número da instância não disponível");
       return;
     }
 
@@ -79,7 +78,7 @@ export default function SearchBar() {
           action: "check",
           server: result.server,
           number,
-          instanceToken,
+          instanceToken: result.instance.token || undefined,
         }),
       });
 
@@ -101,11 +100,7 @@ export default function SearchBar() {
   const handleReduceDelay = async () => {
     if (!result?.found || !result.server || !result.instance) return;
 
-    const instanceToken = result.instance.token || "";
-    if (!instanceToken) {
-      setError("Token da instância não disponível");
-      return;
-    }
+    const number = result.instance.owner || result.instance.name || "";
 
     setDelayLoading(true);
     setDelayResult("");
@@ -117,7 +112,8 @@ export default function SearchBar() {
         body: JSON.stringify({
           action: "reduce-delay",
           server: result.server,
-          instanceToken,
+          number,
+          instanceToken: result.instance.token || undefined,
         }),
       });
 
