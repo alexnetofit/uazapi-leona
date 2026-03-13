@@ -19,8 +19,14 @@ export default function SearchBar() {
   const [delayLoading, setDelayLoading] = useState(false);
   const [delayResult, setDelayResult] = useState<string>("");
 
+  const normalizeNumber = (input: string): string => {
+    const digitsOnly = input.replace(/\D/g, "");
+    return digitsOnly.length > 8 ? digitsOnly.slice(-8) : digitsOnly;
+  };
+
   const handleSearch = async () => {
-    if (query.trim().length < 4) {
+    const cleaned = normalizeNumber(query);
+    if (cleaned.length < 4) {
       setError("Digite pelo menos 4 dígitos");
       return;
     }
@@ -33,7 +39,7 @@ export default function SearchBar() {
 
     try {
       const res = await fetch(
-        `/api/search?number=${encodeURIComponent(query.trim())}`
+        `/api/search?number=${encodeURIComponent(cleaned)}`
       );
       const data = await res.json();
 
