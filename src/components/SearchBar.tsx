@@ -81,7 +81,9 @@ export default function SearchBar() {
       if (res.ok) {
         setQueuePosition(data.queuePosition ?? 0);
       } else {
-        setError(data.error || "Erro ao verificar fila");
+        const detail = data.details ? ` | API: ${JSON.stringify(data.details)}` : "";
+        const req = data.request ? ` | Request: ${data.request.url}` : "";
+        setError(`${data.error || "Erro ao verificar fila"}${req}${detail}`);
       }
     } catch {
       setError("Erro ao conectar para verificar fila");
