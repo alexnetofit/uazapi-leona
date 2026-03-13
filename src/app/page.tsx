@@ -262,7 +262,7 @@ export default function Home() {
                     <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
                     <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
                   </svg>
-                  <span className="hidden sm:inline">{loading ? "..." : "Atualizar"}</span>
+                  <span className="hidden sm:inline">{loading ? "Atualizando..." : "Atualizar"}</span>
                 </button>
               )}
 
@@ -379,6 +379,7 @@ export default function Home() {
                       previous={server.previous ?? null}
                       error={server.error}
                       dc={server.dc}
+                      isRefreshing={loading}
                       onRemove={isAdmin ? handleRemoveServer : undefined}
                     />
                   ))}

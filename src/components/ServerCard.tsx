@@ -11,6 +11,7 @@ interface ServerCardProps {
   previous: PreviousCount | null;
   error?: boolean;
   dc?: string;
+  isRefreshing?: boolean;
   onRemove?: (name: string) => void;
 }
 
@@ -42,6 +43,7 @@ export default function ServerCard({
   previous,
   error,
   dc,
+  isRefreshing,
   onRemove,
 }: ServerCardProps) {
   const formatDate = (iso: string) => {
@@ -56,7 +58,18 @@ export default function ServerCard({
       : "0";
 
   return (
-    <div className={`bg-zinc-900 rounded-2xl border p-4 sm:p-5 hover:shadow-lg hover:shadow-zinc-900/50 transition-shadow ${error ? "border-red-800/60" : "border-zinc-800"}`}>
+    <div className={`relative bg-zinc-900 rounded-2xl border p-4 sm:p-5 hover:shadow-lg hover:shadow-zinc-900/50 transition-shadow ${error ? "border-red-800/60" : "border-zinc-800"} ${isRefreshing ? "animate-pulse" : ""}`}>
+      {isRefreshing && (
+        <div className="absolute inset-0 bg-zinc-900/40 rounded-2xl z-10 flex items-center justify-center">
+          <div className="flex items-center gap-2 bg-zinc-800 px-3 py-1.5 rounded-lg">
+            <svg className="animate-spin h-3.5 w-3.5 text-blue-400" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+              <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" />
+            </svg>
+            <span className="text-[10px] text-zinc-300">Atualizando...</span>
+          </div>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-3 sm:mb-4">
         <div className="flex items-center gap-2">
           <div
