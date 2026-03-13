@@ -19,6 +19,11 @@ export async function GET(request: NextRequest) {
     }
 
     const searchTerm = number.trim();
+    const skipServersParam = searchParams.get("skipServers") || "";
+    const skipSet = new Set(
+      skipServersParam ? skipServersParam.split(",").map((s) => s.trim()) : []
+    );
+
     const servers = await getServers();
 
     if (servers.length === 0) {
@@ -28,8 +33,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Buscar em cada servidor sequencialmente até encontrar
-    for (const server of servers) {
+    const filteredServers = servers.filter((s) => !skipSet.has(s.name));
+
+    if (filteredServers.length === 0) {
+      const result: SearchResult = { found: false };
+      return NextResponse.json(result);
+    }
+
+    for (const server of filteredServers) {
       try {
         const instances = await fetchAllInstances(server.name, server.token);
 
