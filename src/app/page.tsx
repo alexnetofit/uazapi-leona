@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import TotalSummary from "@/components/TotalSummary";
 import ServerCard from "@/components/ServerCard";
@@ -35,6 +35,7 @@ export default function Home() {
   const router = useRouter();
 
   const isAdmin = userRole === "admin";
+  const loadingRef = useRef(false);
 
   useEffect(() => {
     fetch("/api/auth/session")
@@ -116,18 +117,26 @@ export default function Home() {
   }, []);
 
   const loadData = useCallback(async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     const [statusData] = await Promise.all([fetchStatus(), fetchServers()]);
-    setCountdown(calcSecondsUntilNextPoll(statusData?.lastPoll ?? null));
+    const remaining = calcSecondsUntilNextPoll(statusData?.lastPoll ?? null);
+    setCountdown(remaining > 0 ? remaining : POLL_INTERVAL_SECONDS);
     setLoading(false);
+    loadingRef.current = false;
   }, [fetchStatus, fetchServers]);
 
   const manualPoll = useCallback(async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
     await triggerPoll();
     const [statusData] = await Promise.all([fetchStatus(), fetchServers()]);
-    setCountdown(calcSecondsUntilNextPoll(statusData?.lastPoll ?? null));
+    const remaining = calcSecondsUntilNextPoll(statusData?.lastPoll ?? null);
+    setCountdown(remaining > 0 ? remaining : POLL_INTERVAL_SECONDS);
     setLoading(false);
+    loadingRef.current = false;
   }, [fetchStatus, fetchServers, triggerPoll]);
 
   useEffect(() => {
@@ -139,8 +148,10 @@ export default function Home() {
     if (!userRole) return;
     const interval = setInterval(() => {
       setCountdown((prev) => {
-        if (prev <= 0) {
-          loadData();
+        if (prev <= 1) {
+          if (!loadingRef.current) {
+            loadData();
+          }
           return POLL_INTERVAL_SECONDS;
         }
         return prev - 1;
