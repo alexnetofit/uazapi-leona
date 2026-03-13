@@ -144,6 +144,7 @@ export default function Home() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ serverName: server.serverName }),
           });
+          await fetchStatus();
         } catch (err) {
           console.error(`Erro ao pollar ${server.serverName}:`, err);
         }
