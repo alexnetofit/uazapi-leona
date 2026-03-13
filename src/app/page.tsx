@@ -32,6 +32,7 @@ export default function Home() {
   const [showLogs, setShowLogs] = useState(false);
   const [showGroups, setShowGroups] = useState(false);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [refreshingServer, setRefreshingServer] = useState<string | null>(null);
   const router = useRouter();
 
   const isAdmin = userRole === "admin";
@@ -131,13 +132,33 @@ export default function Home() {
     if (loadingRef.current) return;
     loadingRef.current = true;
     setLoading(true);
-    await triggerPoll();
+
+    const serverList = data?.servers ?? [];
+
+    if (serverList.length > 0) {
+      for (const server of serverList) {
+        setRefreshingServer(server.serverName);
+        try {
+          await fetch("/api/poll/server", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ serverName: server.serverName }),
+          });
+        } catch (err) {
+          console.error(`Erro ao pollar ${server.serverName}:`, err);
+        }
+      }
+      setRefreshingServer(null);
+    } else {
+      await triggerPoll();
+    }
+
     const [statusData] = await Promise.all([fetchStatus(), fetchServers()]);
     const remaining = calcSecondsUntilNextPoll(statusData?.lastPoll ?? null);
     setCountdown(remaining > 0 ? remaining : POLL_INTERVAL_SECONDS);
     setLoading(false);
     loadingRef.current = false;
-  }, [fetchStatus, fetchServers, triggerPoll]);
+  }, [fetchStatus, fetchServers, triggerPoll, data]);
 
   useEffect(() => {
     if (userRole) loadData();
@@ -262,7 +283,7 @@ export default function Home() {
                     <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
                     <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
                   </svg>
-                  <span className="hidden sm:inline">{loading ? "Atualizando..." : "Atualizar"}</span>
+                  <span className="hidden sm:inline">{refreshingServer ? `Atualizando ${refreshingServer}...` : loading ? "Atualizando..." : "Atualizar"}</span>
                 </button>
               )}
 
@@ -379,7 +400,7 @@ export default function Home() {
                       previous={server.previous ?? null}
                       error={server.error}
                       dc={server.dc}
-                      isRefreshing={loading}
+                      isRefreshing={refreshingServer === server.serverName}
                       onRemove={isAdmin ? handleRemoveServer : undefined}
                     />
                   ))}
