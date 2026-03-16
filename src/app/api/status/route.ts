@@ -58,7 +58,11 @@ export async function GET() {
       lastPoll,
     };
 
-    return NextResponse.json(data);
+    return NextResponse.json(data, {
+      headers: {
+        "Cache-Control": "s-maxage=30, stale-while-revalidate=90",
+      },
+    });
   } catch (error) {
     console.error("Erro ao buscar status:", error);
     return NextResponse.json(

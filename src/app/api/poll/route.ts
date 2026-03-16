@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServers, getSnapshot, saveSnapshot, getWebhookUrl, setLastPoll, saveLog } from "@/lib/kv";
-import { fetchServerStatus, fetchAllInstances, isConnected, getInstanceNumber } from "@/lib/uazapi";
+import { getServers, getSnapshotsByNames, batchSaveSnapshots, getWebhookUrl, setLastPoll, saveLog } from "@/lib/kv";
+import { fetchServerStatus, fetchAllInstances } from "@/lib/uazapi";
 import { sendPushToAll } from "@/lib/push";
 import { ServerSnapshot, WebhookAlert } from "@/lib/types";
 
@@ -21,6 +21,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const nowDate = new Date();
+    const brtHour = (nowDate.getUTCHours() - 3 + 24) % 24;
+    if (brtHour >= 1 && brtHour < 6) {
+      return NextResponse.json({
+        message: "Polling pausado entre 1h e 6h (BRT)",
+        skipped: true,
+      });
+    }
+
     const servers = await getServers();
 
     if (servers.length === 0) {
@@ -30,10 +39,17 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const serverNames = servers.map((s) => s.name);
+    const [snapshotsMap, webhookUrl] = await Promise.all([
+      getSnapshotsByNames(serverNames),
+      getWebhookUrl(),
+    ]);
+
+    const newSnapshots: ServerSnapshot[] = [];
+
     const results = await Promise.all(
       servers.map(async (server) => {
         try {
-          // 1) Health check leve via /status
           let serverStatus;
           let statusError: unknown = null;
 
@@ -54,15 +70,12 @@ export async function GET(request: NextRequest) {
             }
           }
 
+          const previousSnapshot = snapshotsMap.get(server.name) || null;
+
           if (statusError || !serverStatus) {
             console.error(
               `Servidor ${server.name} inacessível após 2 tentativas`
             );
-
-            const [webhookUrl, previousSnapshot] = await Promise.all([
-              getWebhookUrl(),
-              getSnapshot(server.name),
-            ]);
 
             await sendPushToAll({
               title: `Servidor ${server.name} inacessível`,
@@ -109,17 +122,13 @@ export async function GET(request: NextRequest) {
             return { server: server.name, status: "error" as const, alert: true };
           }
 
-          // 2) Servidor não saudável — alertar sem gastar /instance/all
           if (!serverStatus.isHealthy) {
-            const previousSnapshot = await getSnapshot(server.name);
-
             await sendPushToAll({
               title: `Servidor ${server.name} não saudável`,
               body: `Health check falhou. Conectadas: ${serverStatus.connectedInstances}`,
               tag: `unhealthy-${server.name}`,
             });
 
-            const webhookUrl = await getWebhookUrl();
             if (webhookUrl) {
               try {
                 await fetch(webhookUrl, {
@@ -159,24 +168,19 @@ export async function GET(request: NextRequest) {
             return { server: server.name, status: "unhealthy" as const, alert: true };
           }
 
-          // 3) Saudável — buscar total via /instance/all em paralelo com snapshot anterior
           const connectedInstances = serverStatus.connectedInstances;
           const now = new Date().toISOString();
 
-          const [instancesResult, previousSnapshot] = await Promise.all([
-            fetchAllInstances(server.name, server.token)
-              .then((inst) => inst.length)
-              .catch((err) => {
-                console.error(
-                  `Falha ao buscar /instance/all para ${server.name}:`,
-                  err
-                );
-                return connectedInstances;
-              }),
-            getSnapshot(server.name),
-          ]);
+          const totalInstances = await fetchAllInstances(server.name, server.token)
+            .then((inst) => inst.length)
+            .catch((err) => {
+              console.error(
+                `Falha ao buscar /instance/all para ${server.name}:`,
+                err
+              );
+              return connectedInstances;
+            });
 
-          const totalInstances = instancesResult;
           let alertTriggered = false;
 
           if (previousSnapshot) {
@@ -190,7 +194,6 @@ export async function GET(request: NextRequest) {
                 tag: `disconnect-${server.name}`,
               });
 
-              const webhookUrl = await getWebhookUrl();
               if (webhookUrl) {
                 const alert: WebhookAlert = {
                   server: server.name,
@@ -241,7 +244,7 @@ export async function GET(request: NextRequest) {
             dc: serverStatus.dc,
           };
 
-          await saveSnapshot(newSnapshot);
+          newSnapshots.push(newSnapshot);
 
           return {
             server: server.name,
@@ -258,7 +261,10 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    await setLastPoll(new Date().toISOString());
+    await Promise.all([
+      batchSaveSnapshots(newSnapshots, snapshotsMap),
+      setLastPoll(new Date().toISOString()),
+    ]);
 
     return NextResponse.json({
       message: "Polling concluído",

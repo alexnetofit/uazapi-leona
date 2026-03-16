@@ -7,7 +7,11 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const logs = await getLogs();
-    return NextResponse.json(logs);
+    return NextResponse.json(logs, {
+      headers: {
+        "Cache-Control": "s-maxage=15, stale-while-revalidate=45",
+      },
+    });
   } catch (error) {
     console.error("Erro ao buscar logs:", error);
     return NextResponse.json(

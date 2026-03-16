@@ -141,6 +141,44 @@ export async function getDashboardData(): Promise<{
   return { servers, snapshots, previousCounts, lastPoll: lastPoll || null };
 }
 
+export async function getSnapshotsByNames(
+  serverNames: string[]
+): Promise<Map<string, ServerSnapshot | null>> {
+  if (!isRedisConfigured() || serverNames.length === 0) return new Map();
+  const redis = getRedis();
+  const keys = serverNames.map((n) => `${SNAPSHOT_PREFIX}${n}`);
+  const results = await redis.mget<(ServerSnapshot | null)[]>(...keys);
+  const map = new Map<string, ServerSnapshot | null>();
+  serverNames.forEach((name, i) => {
+    map.set(name, results[i] || null);
+  });
+  return map;
+}
+
+export async function batchSaveSnapshots(
+  snapshots: ServerSnapshot[],
+  previousSnapshots: Map<string, ServerSnapshot | null>
+): Promise<void> {
+  if (!isRedisConfigured() || snapshots.length === 0) return;
+  const redis = getRedis();
+  const entries: Record<string, unknown> = {};
+
+  for (const snapshot of snapshots) {
+    entries[`${SNAPSHOT_PREFIX}${snapshot.serverName}`] = snapshot;
+    const prev = previousSnapshots.get(snapshot.serverName);
+    if (prev) {
+      entries[`${PREVIOUS_PREFIX}${snapshot.serverName}`] = {
+        totalInstances: prev.totalInstances,
+        connectedInstances: prev.connectedInstances,
+        disconnectedInstances: prev.disconnectedInstances,
+        timestamp: prev.timestamp,
+      } as PreviousCount;
+    }
+  }
+
+  await redis.mset(entries);
+}
+
 // --- Webhook ---
 
 export async function getWebhookUrl(): Promise<string | null> {
