@@ -52,6 +52,10 @@ export async function POST(request: NextRequest) {
       return handleReduceDelay(server, token);
     }
 
+    if (action === "reset-instance") {
+      return handleResetInstance(server, token);
+    }
+
     return NextResponse.json({ error: "Ação inválida" }, { status: 400 });
   } catch (error) {
     console.error("Erro na operação de fila:", error);
@@ -118,6 +122,30 @@ async function handleReduceDelay(serverName: string, instanceToken: string) {
   if (!res.ok) {
     return NextResponse.json(
       { error: "Erro ao reduzir delay", details: data },
+      { status: res.status }
+    );
+  }
+
+  return NextResponse.json({ success: true, data });
+}
+
+async function handleResetInstance(serverName: string, instanceToken: string) {
+  const res = await fetch(
+    `https://${serverName}.uazapi.com/instance/reset`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        token: instanceToken,
+      },
+    }
+  );
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    return NextResponse.json(
+      { error: "Erro ao reiniciar instância", details: data },
       { status: res.status }
     );
   }

@@ -16,6 +16,8 @@ interface ResultEntry {
   queueLoading: boolean;
   delayLoading: boolean;
   delayResult: string;
+  resetLoading: boolean;
+  resetResult: string;
 }
 
 export default function SearchBar() {
@@ -66,6 +68,8 @@ export default function SearchBar() {
           queueLoading: false,
           delayLoading: false,
           delayResult: "",
+          resetLoading: false,
+          resetResult: "",
         }]);
       } else {
         setSearchExhausted(true);
@@ -95,6 +99,8 @@ export default function SearchBar() {
             queueLoading: false,
             delayLoading: false,
             delayResult: "",
+            resetLoading: false,
+            resetResult: "",
           },
         ]);
       } else {
@@ -179,6 +185,37 @@ export default function SearchBar() {
       updateResult(index, { delayResult: "Erro ao conectar" });
     } finally {
       updateResult(index, { delayLoading: false });
+    }
+  };
+
+  const handleResetInstance = async (index: number) => {
+    const entry = results[index];
+    const number = entry.instance.owner || entry.instance.name || "";
+
+    updateResult(index, { resetLoading: true, resetResult: "" });
+
+    try {
+      const res = await fetch("/api/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reset-instance",
+          server: entry.server,
+          number,
+          instanceToken: entry.instance.token || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        updateResult(index, { resetResult: "Instância reiniciada com sucesso!" });
+      } else {
+        updateResult(index, { resetResult: data.error || "Erro ao reiniciar instância" });
+      }
+    } catch {
+      updateResult(index, { resetResult: "Erro ao conectar" });
+    } finally {
+      updateResult(index, { resetLoading: false });
     }
   };
 
@@ -296,6 +333,13 @@ export default function SearchBar() {
                   >
                     {entry.delayLoading ? "Reduzindo..." : "Reduzir Delay"}
                   </button>
+                  <button
+                    onClick={() => handleResetInstance(index)}
+                    disabled={entry.resetLoading}
+                    className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+                  >
+                    {entry.resetLoading ? "Reiniciando..." : "Reiniciar Instância"}
+                  </button>
                   {entry.delayResult && (
                     <span
                       className={`text-xs ${
@@ -305,6 +349,17 @@ export default function SearchBar() {
                       }`}
                     >
                       {entry.delayResult}
+                    </span>
+                  )}
+                  {entry.resetResult && (
+                    <span
+                      className={`text-xs ${
+                        entry.resetResult.includes("sucesso")
+                          ? "text-green-400"
+                          : "text-red-400"
+                      }`}
+                    >
+                      {entry.resetResult}
                     </span>
                   )}
                 </div>
