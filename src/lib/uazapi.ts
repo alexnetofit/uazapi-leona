@@ -134,14 +134,15 @@ export async function fetchQueueStatus(
   }
 
   const data = await response.json();
+  const q = data.queue || data;
 
   return {
-    status: data.status || "unknown",
-    pending: data.pending ?? 0,
-    processingNow: data.processingNow ?? false,
-    acceptingNewMessages: data.acceptingNewMessages ?? true,
-    sessionReady: data.sessionReady ?? false,
-    resetting: data.resetting ?? false,
+    status: q.status || "unknown",
+    pending: q.pending ?? 0,
+    processingNow: q.processingNow ?? false,
+    acceptingNewMessages: q.acceptingNewMessages ?? true,
+    sessionReady: q.sessionReady ?? false,
+    resetting: q.resetting ?? false,
   };
 }
 

@@ -100,13 +100,15 @@ async function handleCheckQueue(serverName: string, instanceToken: string) {
     );
   }
 
+  const q = data.queue || data;
+
   return NextResponse.json({
     success: true,
-    pending: data.pending ?? 0,
-    status: data.status ?? "unknown",
-    processingNow: data.processingNow ?? false,
-    sessionReady: data.sessionReady ?? false,
-    resetting: data.resetting ?? false,
+    pending: q.pending ?? 0,
+    status: q.status ?? "unknown",
+    processingNow: q.processingNow ?? false,
+    sessionReady: q.sessionReady ?? false,
+    resetting: q.resetting ?? false,
   });
 }
 

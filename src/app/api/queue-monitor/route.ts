@@ -81,7 +81,8 @@ export async function GET(request: NextRequest) {
           clearTimeout(timeout);
           if (!res.ok) return;
           const data = await res.json();
-          const pending = data.pending ?? 0;
+          const q = data.queue || data;
+          const pending = q.pending ?? 0;
           if (pending > 0) {
             queueEntries.push({
               server: item.server,
@@ -89,10 +90,10 @@ export async function GET(request: NextRequest) {
               number: item.owner,
               token: item.token,
               pending,
-              status: data.status ?? "unknown",
-              processingNow: data.processingNow ?? false,
-              sessionReady: data.sessionReady ?? false,
-              resetting: data.resetting ?? false,
+              status: q.status ?? "unknown",
+              processingNow: q.processingNow ?? false,
+              sessionReady: q.sessionReady ?? false,
+              resetting: q.resetting ?? false,
               checkedAt,
             });
           }
