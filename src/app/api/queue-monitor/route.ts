@@ -6,43 +6,8 @@ import { QueueEntry } from "@/lib/types";
 
 export const maxDuration = 60;
 
-const BATCH_SIZE = 50;
 const QUEUE_ALERT_THRESHOLD = 20;
-const FETCH_TIMEOUT_MS = 5000;
-
-async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function checkInstanceQueue(
-  serverName: string,
-  instanceToken: string
-): Promise<{ pending: number; status: string; processingNow: boolean; sessionReady: boolean; resetting: boolean } | null> {
-  try {
-    const res = await fetchWithTimeout(
-      `https://${serverName}.uazapi.com/message/async`,
-      { method: "GET", headers: { Accept: "application/json", token: instanceToken } },
-      FETCH_TIMEOUT_MS
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    return {
-      pending: data.pending ?? 0,
-      status: data.status ?? "unknown",
-      processingNow: data.processingNow ?? false,
-      sessionReady: data.sessionReady ?? false,
-      resetting: data.resetting ?? false,
-    };
-  } catch {
-    return null;
-  }
-}
+const FETCH_TIMEOUT_MS = 4000;
 
 export async function GET(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
@@ -75,54 +40,68 @@ export async function GET(request: NextRequest) {
     }
 
     type ConnectedInstance = { server: string; name: string; owner: string; token: string };
-    const allConnected: ConnectedInstance[] = [];
 
     const serverResults = await Promise.allSettled(
       servers.map(async (server) => {
         const instances = await fetchAllInstances(server.name, server.token);
-        return instances.filter(isConnected).map((inst) => ({
-          server: server.name,
-          name: inst.name || "",
-          owner: inst.owner || "",
-          token: inst.token || "",
-        }));
+        return instances
+          .filter((inst) => isConnected(inst) && inst.token)
+          .map((inst) => ({
+            server: server.name,
+            name: inst.name || "",
+            owner: inst.owner || "",
+            token: inst.token!,
+          }));
       })
     );
 
+    const allConnected: ConnectedInstance[] = [];
     for (const result of serverResults) {
       if (result.status === "fulfilled") {
-        for (const inst of result.value) {
-          if (inst.token) allConnected.push(inst);
-        }
+        allConnected.push(...result.value);
       }
     }
 
     const checkedAt = new Date().toISOString();
     const queueEntries: QueueEntry[] = [];
 
-    for (let i = 0; i < allConnected.length; i += BATCH_SIZE) {
-      const batch = allConnected.slice(i, i + BATCH_SIZE);
-      const results = await Promise.allSettled(
-        batch.map(async (item) => {
-          const q = await checkInstanceQueue(item.server, item.token);
-          if (q && q.pending > 0) {
+    const queueResults = await Promise.allSettled(
+      allConnected.map(async (item) => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+        try {
+          const res = await fetch(
+            `https://${item.server}.uazapi.com/message/async`,
+            {
+              method: "GET",
+              headers: { Accept: "application/json", token: item.token },
+              signal: controller.signal,
+            }
+          );
+          clearTimeout(timeout);
+          if (!res.ok) return;
+          const data = await res.json();
+          const pending = data.pending ?? 0;
+          if (pending > 0) {
             queueEntries.push({
               server: item.server,
               instanceName: item.name,
               number: item.owner,
               token: item.token,
-              pending: q.pending,
-              status: q.status,
-              processingNow: q.processingNow,
-              sessionReady: q.sessionReady,
-              resetting: q.resetting,
+              pending,
+              status: data.status ?? "unknown",
+              processingNow: data.processingNow ?? false,
+              sessionReady: data.sessionReady ?? false,
+              resetting: data.resetting ?? false,
               checkedAt,
             });
           }
-        })
-      );
-      void results;
-    }
+        } catch {
+          clearTimeout(timeout);
+        }
+      })
+    );
+    void queueResults;
 
     queueEntries.sort((a, b) => b.pending - a.pending);
     await saveQueueData(queueEntries);
@@ -135,16 +114,17 @@ export async function GET(request: NextRequest) {
         .map((e) => `${e.number} (${e.server}): ${e.pending}`)
         .join(", ");
 
-      await sendPushToAll({
-        title: `Filas grandes: ${alertEntries.length} instância(s)`,
-        body: summary,
-        tag: "queue-alert",
-      });
+      const [webhookUrl] = await Promise.all([
+        getWebhookUrl(),
+        sendPushToAll({
+          title: `Filas grandes: ${alertEntries.length} instância(s)`,
+          body: summary,
+          tag: "queue-alert",
+        }),
+      ]);
 
-      const webhookUrl = await getWebhookUrl();
-      if (webhookUrl) {
-        try {
-          await fetch(webhookUrl, {
+      const webhookPromise = webhookUrl
+        ? fetch(webhookUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -158,23 +138,23 @@ export async function GET(request: NextRequest) {
               })),
               timestamp: checkedAt,
             }),
-          });
-        } catch (webhookError) {
-          console.error("Erro ao enviar webhook de queue alert:", webhookError);
-        }
-      }
+          }).catch((err) => console.error("Erro webhook queue alert:", err))
+        : Promise.resolve();
 
-      await saveLog({
-        id: `${Date.now()}-queue-alert`,
-        type: "queue_alert",
-        server: alertEntries.map((e) => e.server).join(", "),
-        message: `${alertEntries.length} instância(s) com fila > ${QUEUE_ALERT_THRESHOLD}`,
-        timestamp: checkedAt,
-        details: {
-          total_alerting: alertEntries.length,
-          top_instances: summary,
-        },
-      });
+      await Promise.all([
+        webhookPromise,
+        saveLog({
+          id: `${Date.now()}-queue-alert`,
+          type: "queue_alert",
+          server: alertEntries.map((e) => e.server).join(", "),
+          message: `${alertEntries.length} instância(s) com fila > ${QUEUE_ALERT_THRESHOLD}`,
+          timestamp: checkedAt,
+          details: {
+            total_alerting: alertEntries.length,
+            top_instances: summary,
+          },
+        }),
+      ]);
     }
 
     return NextResponse.json({
