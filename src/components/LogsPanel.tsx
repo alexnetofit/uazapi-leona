@@ -22,6 +22,12 @@ const TYPE_CONFIG = {
     bg: "bg-orange-950/30 border-orange-900/40",
     dot: "bg-orange-500",
   },
+  queue_alert: {
+    label: "Fila Grande",
+    color: "text-amber-400",
+    bg: "bg-amber-950/30 border-amber-900/40",
+    dot: "bg-amber-500",
+  },
 };
 
 interface LogsPanelProps {
