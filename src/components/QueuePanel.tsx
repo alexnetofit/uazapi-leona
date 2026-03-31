@@ -15,6 +15,15 @@ interface QueueEntry {
   checkedAt: string;
 }
 
+interface EntryState {
+  delayLoading: boolean;
+  delayResult: string;
+  resetLoading: boolean;
+  resetResult: string;
+  clearLoading: boolean;
+  clearResult: string;
+}
+
 interface QueuePanelProps {
   isOpen: boolean;
   onClose: () => void;
@@ -98,10 +107,30 @@ const TIERS: TierConfig[] = [
   },
 ];
 
+function entryKey(entry: QueueEntry) {
+  return `${entry.server}-${entry.number}`;
+}
+
 export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps) {
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [lastCheck, setLastCheck] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [actionStates, setActionStates] = useState<Record<string, EntryState>>({});
+
+  const getState = (entry: QueueEntry): EntryState => {
+    return actionStates[entryKey(entry)] || {
+      delayLoading: false, delayResult: "",
+      resetLoading: false, resetResult: "",
+      clearLoading: false, clearResult: "",
+    };
+  };
+
+  const updateState = (entry: QueueEntry, updates: Partial<EntryState>) => {
+    setActionStates((prev) => ({
+      ...prev,
+      [entryKey(entry)]: { ...getState(entry), ...updates },
+    }));
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -122,7 +151,10 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
   }, []);
 
   useEffect(() => {
-    if (isOpen) fetchData();
+    if (isOpen) {
+      fetchData();
+      setActionStates({});
+    }
   }, [isOpen, fetchData]);
 
   useEffect(() => {
@@ -130,6 +162,81 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
     const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
   }, [isOpen, fetchData]);
+
+  const handleReduceDelay = async (entry: QueueEntry) => {
+    if (!entry.token) return;
+    updateState(entry, { delayLoading: true, delayResult: "" });
+    try {
+      const res = await fetch("/api/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reduce-delay",
+          server: entry.server,
+          number: entry.number,
+          instanceToken: entry.token,
+        }),
+      });
+      const data = await res.json();
+      updateState(entry, {
+        delayLoading: false,
+        delayResult: res.ok ? "Delay reduzido!" : (data.error || "Erro"),
+      });
+    } catch {
+      updateState(entry, { delayLoading: false, delayResult: "Erro ao conectar" });
+    }
+  };
+
+  const handleResetInstance = async (entry: QueueEntry) => {
+    if (!entry.token) return;
+    updateState(entry, { resetLoading: true, resetResult: "" });
+    try {
+      const res = await fetch("/api/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "reset-instance",
+          server: entry.server,
+          number: entry.number,
+          instanceToken: entry.token,
+        }),
+      });
+      const data = await res.json();
+      updateState(entry, {
+        resetLoading: false,
+        resetResult: res.ok ? "Reiniciada!" : (data.error || "Erro"),
+      });
+    } catch {
+      updateState(entry, { resetLoading: false, resetResult: "Erro ao conectar" });
+    }
+  };
+
+  const handleClearQueue = async (entry: QueueEntry) => {
+    if (!entry.token) return;
+    if (!confirm("Tem certeza? Isso vai cancelar TODAS as mensagens pendentes na fila.")) return;
+    if (!confirm("ÚLTIMA CONFIRMAÇÃO: Todas as mensagens serão marcadas como canceladas. Deseja prosseguir?")) return;
+
+    updateState(entry, { clearLoading: true, clearResult: "" });
+    try {
+      const res = await fetch("/api/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "clear-queue",
+          server: entry.server,
+          number: entry.number,
+          instanceToken: entry.token,
+        }),
+      });
+      const data = await res.json();
+      updateState(entry, {
+        clearLoading: false,
+        clearResult: res.ok ? "Fila apagada!" : (data.error || "Erro"),
+      });
+    } catch {
+      updateState(entry, { clearLoading: false, clearResult: "Erro ao conectar" });
+    }
+  };
 
   const formatDate = (iso: string) => {
     const d = new Date(iso);
@@ -246,6 +353,7 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
                     <div className={`rounded-lg border ${tier.borderColor} overflow-hidden divide-y divide-zinc-800/50`}>
                       {tierEntries.map((entry, i) => {
                         const statusInfo = getStatusInfo(entry.status);
+                        const state = getState(entry);
                         return (
                           <div
                             key={`${entry.server}-${entry.number}-${i}`}
@@ -289,12 +397,60 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
                               )}
                             </div>
 
-                            {isAdmin && entry.token && (
+                            {entry.token && (
                               <div className="mt-1.5 flex items-center gap-1">
                                 <span className="text-[10px] text-zinc-500">Token:</span>
                                 <code className="text-[10px] text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded font-mono break-all">
                                   {entry.token}
                                 </code>
+                              </div>
+                            )}
+
+                            {entry.token && (
+                              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                <button
+                                  onClick={() => handleReduceDelay(entry)}
+                                  disabled={state.delayLoading}
+                                  className="px-2.5 py-1 rounded-md bg-amber-600 text-white text-[10px] font-medium hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                                >
+                                  {state.delayLoading ? "Reduzindo..." : "Reduzir Delay"}
+                                </button>
+                                <button
+                                  onClick={() => handleResetInstance(entry)}
+                                  disabled={state.resetLoading}
+                                  className="px-2.5 py-1 rounded-md bg-red-600 text-white text-[10px] font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+                                >
+                                  {state.resetLoading ? "Reiniciando..." : "Reiniciar Instância"}
+                                </button>
+                                {isAdmin && (
+                                  <button
+                                    onClick={() => handleClearQueue(entry)}
+                                    disabled={state.clearLoading}
+                                    className="px-2.5 py-1 rounded-md bg-red-900 text-red-200 text-[10px] font-medium hover:bg-red-800 disabled:opacity-50 transition-colors border border-red-700"
+                                  >
+                                    {state.clearLoading ? "Apagando..." : "Apagar Fila"}
+                                  </button>
+                                )}
+                              </div>
+                            )}
+
+                            {(state.delayResult || state.resetResult || state.clearResult) && (
+                              <div className="mt-1.5 flex flex-wrap gap-2">
+                                {state.delayResult && (
+                                  <span className={`text-[10px] ${state.delayResult.includes("reduzido") ? "text-green-400" : "text-red-400"}`}>
+                                    {state.delayResult}
+                                  </span>
+                                )}
+                                {state.resetResult && (
+                                  <span className={`text-[10px] ${state.resetResult.includes("Reiniciada") ? "text-green-400" : "text-red-400"}`}>
+                                    {state.resetResult}
+                                  </span>
+                                )}
+                                {state.clearResult && (
+                                  <span className={`text-[10px] ${state.clearResult.includes("apagada") ? "text-green-400" : "text-red-400"}`}>
+                                    {state.clearResult}
+                                  </span>
+                                )}
                               </div>
                             )}
                           </div>
