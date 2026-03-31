@@ -4,6 +4,7 @@ import { verifySession } from "@/lib/auth";
 const PUBLIC_PATHS = [
   "/api/auth/login",
   "/api/poll",
+  "/api/queue-monitor",
   "/login",
 ];
 
