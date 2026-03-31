@@ -1,30 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServers, saveQueueData, getWebhookUrl, saveLog } from "@/lib/kv";
-import { fetchAllInstances, isConnected, getInstanceNumber, fetchQueueStatus } from "@/lib/uazapi";
+import { fetchAllInstances, isConnected } from "@/lib/uazapi";
 import { sendPushToAll } from "@/lib/push";
 import { QueueEntry } from "@/lib/types";
 
 export const maxDuration = 60;
 
-const BATCH_SIZE = 10;
+const BATCH_SIZE = 50;
 const QUEUE_ALERT_THRESHOLD = 20;
+const FETCH_TIMEOUT_MS = 5000;
 
-async function processBatch<T, R>(
-  items: T[],
-  batchSize: number,
-  fn: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = [];
-  for (let i = 0; i < items.length; i += batchSize) {
-    const batch = items.slice(i, i + batchSize);
-    const batchResults = await Promise.allSettled(batch.map(fn));
-    for (const result of batchResults) {
-      if (result.status === "fulfilled") {
-        results.push(result.value);
-      }
-    }
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
   }
-  return results;
+}
+
+async function checkInstanceQueue(
+  serverName: string,
+  instanceToken: string
+): Promise<{ pending: number; status: string; processingNow: boolean; sessionReady: boolean; resetting: boolean } | null> {
+  try {
+    const res = await fetchWithTimeout(
+      `https://${serverName}.uazapi.com/message/async`,
+      { method: "GET", headers: { Accept: "application/json", token: instanceToken } },
+      FETCH_TIMEOUT_MS
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      pending: data.pending ?? 0,
+      status: data.status ?? "unknown",
+      processingNow: data.processingNow ?? false,
+      sessionReady: data.sessionReady ?? false,
+      resetting: data.resetting ?? false,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -57,53 +74,55 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: "Nenhum servidor cadastrado", checked: 0 });
     }
 
-    const allConnected: { server: string; instance: { name: string; owner: string; token: string } }[] = [];
+    type ConnectedInstance = { server: string; name: string; owner: string; token: string };
+    const allConnected: ConnectedInstance[] = [];
 
-    for (const server of servers) {
-      try {
+    const serverResults = await Promise.allSettled(
+      servers.map(async (server) => {
         const instances = await fetchAllInstances(server.name, server.token);
-        const connected = instances.filter(isConnected);
-        for (const inst of connected) {
-          if (inst.token) {
-            allConnected.push({
-              server: server.name,
-              instance: {
-                name: inst.name || "",
-                owner: inst.owner || "",
-                token: inst.token,
-              },
-            });
-          }
+        return instances.filter(isConnected).map((inst) => ({
+          server: server.name,
+          name: inst.name || "",
+          owner: inst.owner || "",
+          token: inst.token || "",
+        }));
+      })
+    );
+
+    for (const result of serverResults) {
+      if (result.status === "fulfilled") {
+        for (const inst of result.value) {
+          if (inst.token) allConnected.push(inst);
         }
-      } catch (err) {
-        console.error(`Erro ao buscar instâncias de ${server.name} para queue monitor:`, err);
       }
     }
 
     const checkedAt = new Date().toISOString();
     const queueEntries: QueueEntry[] = [];
 
-    await processBatch(allConnected, BATCH_SIZE, async (item) => {
-      try {
-        const queueStatus = await fetchQueueStatus(item.server, item.instance.token);
-        if (queueStatus.pending > 0) {
-          queueEntries.push({
-            server: item.server,
-            instanceName: item.instance.name,
-            number: item.instance.owner,
-            token: item.instance.token,
-            pending: queueStatus.pending,
-            status: queueStatus.status,
-            processingNow: queueStatus.processingNow,
-            sessionReady: queueStatus.sessionReady,
-            resetting: queueStatus.resetting,
-            checkedAt,
-          });
-        }
-      } catch {
-        // Skip instances that fail
-      }
-    });
+    for (let i = 0; i < allConnected.length; i += BATCH_SIZE) {
+      const batch = allConnected.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map(async (item) => {
+          const q = await checkInstanceQueue(item.server, item.token);
+          if (q && q.pending > 0) {
+            queueEntries.push({
+              server: item.server,
+              instanceName: item.name,
+              number: item.owner,
+              token: item.token,
+              pending: q.pending,
+              status: q.status,
+              processingNow: q.processingNow,
+              sessionReady: q.sessionReady,
+              resetting: q.resetting,
+              checkedAt,
+            });
+          }
+        })
+      );
+      void results;
+    }
 
     queueEntries.sort((a, b) => b.pending - a.pending);
     await saveQueueData(queueEntries);
