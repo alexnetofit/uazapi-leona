@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Instance } from "@/lib/types";
+import { UserRole } from "@/lib/auth";
 
 interface SearchResult {
   found: boolean;
@@ -12,21 +13,30 @@ interface SearchResult {
 interface ResultEntry {
   server: string;
   instance: Instance;
-  queuePosition: number | null;
+  queuePending: number | null;
+  queueStatus: string;
   queueLoading: boolean;
   delayLoading: boolean;
   delayResult: string;
   resetLoading: boolean;
   resetResult: string;
+  clearLoading: boolean;
+  clearResult: string;
 }
 
-export default function SearchBar() {
+interface SearchBarProps {
+  userRole?: UserRole | null;
+}
+
+export default function SearchBar({ userRole }: SearchBarProps) {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<ResultEntry[]>([]);
   const [error, setError] = useState("");
   const [searchExhausted, setSearchExhausted] = useState(false);
   const [moreLoading, setMoreLoading] = useState(false);
+
+  const isAdmin = userRole === "admin";
 
   const normalizeNumber = (input: string): string => {
     const digitsOnly = input.replace(/\D/g, "");
@@ -45,6 +55,20 @@ export default function SearchBar() {
     return data;
   };
 
+  const newResultEntry = (server: string, instance: Instance): ResultEntry => ({
+    server,
+    instance,
+    queuePending: null,
+    queueStatus: "",
+    queueLoading: false,
+    delayLoading: false,
+    delayResult: "",
+    resetLoading: false,
+    resetResult: "",
+    clearLoading: false,
+    clearResult: "",
+  });
+
   const handleSearch = async () => {
     const cleaned = normalizeNumber(query);
     if (cleaned.length < 4) {
@@ -61,16 +85,7 @@ export default function SearchBar() {
       const data = await doSearch([]);
 
       if (data.found && data.server && data.instance) {
-        setResults([{
-          server: data.server,
-          instance: data.instance,
-          queuePosition: null,
-          queueLoading: false,
-          delayLoading: false,
-          delayResult: "",
-          resetLoading: false,
-          resetResult: "",
-        }]);
+        setResults([newResultEntry(data.server, data.instance)]);
       } else {
         setSearchExhausted(true);
       }
@@ -92,16 +107,7 @@ export default function SearchBar() {
       if (data.found && data.server && data.instance) {
         setResults((prev) => [
           ...prev,
-          {
-            server: data.server!,
-            instance: data.instance!,
-            queuePosition: null,
-            queueLoading: false,
-            delayLoading: false,
-            delayResult: "",
-            resetLoading: false,
-            resetResult: "",
-          },
+          newResultEntry(data.server!, data.instance!),
         ]);
       } else {
         setSearchExhausted(true);
@@ -127,7 +133,7 @@ export default function SearchBar() {
       return;
     }
 
-    updateResult(index, { queueLoading: true, queuePosition: null, delayResult: "" });
+    updateResult(index, { queueLoading: true, queuePending: null, queueStatus: "", delayResult: "", resetResult: "", clearResult: "" });
     setError("");
 
     try {
@@ -144,11 +150,13 @@ export default function SearchBar() {
 
       const data = await res.json();
       if (res.ok) {
-        updateResult(index, { queuePosition: data.queuePosition ?? 0 });
+        updateResult(index, {
+          queuePending: data.pending ?? 0,
+          queueStatus: data.status ?? "",
+        });
       } else {
         const detail = data.details ? ` | API: ${JSON.stringify(data.details)}` : "";
-        const req = data.request ? ` | Request: ${data.request.url}` : "";
-        setError(`${data.error || "Erro ao verificar fila"}${req}${detail}`);
+        setError(`${data.error || "Erro ao verificar fila"}${detail}`);
       }
     } catch {
       setError("Erro ao conectar para verificar fila");
@@ -216,6 +224,44 @@ export default function SearchBar() {
       updateResult(index, { resetResult: "Erro ao conectar" });
     } finally {
       updateResult(index, { resetLoading: false });
+    }
+  };
+
+  const handleClearQueue = async (index: number) => {
+    if (!confirm("Tem certeza? Isso vai cancelar TODAS as mensagens pendentes na fila.")) {
+      return;
+    }
+    if (!confirm("ÚLTIMA CONFIRMAÇÃO: Todas as mensagens serão marcadas como canceladas. Deseja prosseguir?")) {
+      return;
+    }
+
+    const entry = results[index];
+    const number = entry.instance.owner || entry.instance.name || "";
+
+    updateResult(index, { clearLoading: true, clearResult: "" });
+
+    try {
+      const res = await fetch("/api/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "clear-queue",
+          server: entry.server,
+          number,
+          instanceToken: entry.instance.token || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        updateResult(index, { clearResult: "Fila apagada com sucesso!" });
+      } else {
+        updateResult(index, { clearResult: data.error || "Erro ao apagar fila" });
+      }
+    } catch {
+      updateResult(index, { clearResult: "Erro ao conectar" });
+    } finally {
+      updateResult(index, { clearLoading: false });
     }
   };
 
@@ -318,50 +364,63 @@ export default function SearchBar() {
                 ))}
               </div>
 
-              {entry.queuePosition !== null && (
-                <div className="mt-3 pt-3 border-t border-emerald-800/50 flex flex-wrap items-center gap-3">
-                  <span className="text-sm text-zinc-200">
-                    Posição na fila:{" "}
-                    <strong className="text-amber-400 text-base">
-                      {entry.queuePosition}
-                    </strong>
-                  </span>
-                  <button
-                    onClick={() => handleReduceDelay(index)}
-                    disabled={entry.delayLoading}
-                    className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 disabled:opacity-50 transition-colors"
-                  >
-                    {entry.delayLoading ? "Reduzindo..." : "Reduzir Delay"}
-                  </button>
-                  <button
-                    onClick={() => handleResetInstance(index)}
-                    disabled={entry.resetLoading}
-                    className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
-                  >
-                    {entry.resetLoading ? "Reiniciando..." : "Reiniciar Instância"}
-                  </button>
-                  {entry.delayResult && (
-                    <span
-                      className={`text-xs ${
-                        entry.delayResult.includes("sucesso")
-                          ? "text-green-400"
-                          : "text-red-400"
-                      }`}
-                    >
-                      {entry.delayResult}
+              {entry.queuePending !== null && (
+                <div className="mt-3 pt-3 border-t border-emerald-800/50">
+                  <div className="flex flex-wrap items-center gap-3 mb-2">
+                    <span className="text-sm text-zinc-200">
+                      Mensagens na fila:{" "}
+                      <strong className={`text-base ${entry.queuePending > 20 ? "text-red-400" : "text-amber-400"}`}>
+                        {entry.queuePending}
+                      </strong>
                     </span>
-                  )}
-                  {entry.resetResult && (
-                    <span
-                      className={`text-xs ${
-                        entry.resetResult.includes("sucesso")
-                          ? "text-green-400"
-                          : "text-red-400"
-                      }`}
+                    {entry.queueStatus && (
+                      <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded">
+                        {entry.queueStatus}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => handleReduceDelay(index)}
+                      disabled={entry.delayLoading}
+                      className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 disabled:opacity-50 transition-colors"
                     >
-                      {entry.resetResult}
-                    </span>
-                  )}
+                      {entry.delayLoading ? "Reduzindo..." : "Reduzir Delay"}
+                    </button>
+                    <button
+                      onClick={() => handleResetInstance(index)}
+                      disabled={entry.resetLoading}
+                      className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+                    >
+                      {entry.resetLoading ? "Reiniciando..." : "Reiniciar Instância"}
+                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => handleClearQueue(index)}
+                        disabled={entry.clearLoading}
+                        className="px-3 py-1.5 rounded-lg bg-red-900 text-red-200 text-xs font-medium hover:bg-red-800 disabled:opacity-50 transition-colors border border-red-700"
+                      >
+                        {entry.clearLoading ? "Apagando..." : "Apagar Fila"}
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {entry.delayResult && (
+                      <span className={`text-xs ${entry.delayResult.includes("sucesso") ? "text-green-400" : "text-red-400"}`}>
+                        {entry.delayResult}
+                      </span>
+                    )}
+                    {entry.resetResult && (
+                      <span className={`text-xs ${entry.resetResult.includes("sucesso") ? "text-green-400" : "text-red-400"}`}>
+                        {entry.resetResult}
+                      </span>
+                    )}
+                    {entry.clearResult && (
+                      <span className={`text-xs ${entry.clearResult.includes("sucesso") ? "text-green-400" : "text-red-400"}`}>
+                        {entry.clearResult}
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

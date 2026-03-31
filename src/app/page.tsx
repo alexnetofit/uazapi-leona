@@ -9,6 +9,7 @@ import SearchBar from "@/components/SearchBar";
 import WebhookConfig from "@/components/WebhookConfig";
 import PushNotification from "@/components/PushNotification";
 import LogsPanel from "@/components/LogsPanel";
+import QueuePanel from "@/components/QueuePanel";
 import GroupsPanel from "@/components/GroupsPanel";
 import { DashboardData } from "@/lib/types";
 import { UserRole } from "@/lib/auth";
@@ -30,6 +31,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [countdown, setCountdown] = useState(POLL_INTERVAL_SECONDS);
   const [showLogs, setShowLogs] = useState(false);
+  const [showQueues, setShowQueues] = useState(false);
   const [showGroups, setShowGroups] = useState(false);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [refreshingServer, setRefreshingServer] = useState<string | null>(null);
@@ -304,6 +306,16 @@ export default function Home() {
               )}
 
               <button
+                onClick={() => setShowQueues(true)}
+                className="p-2 sm:px-3 sm:py-2 rounded-lg text-xs bg-zinc-800 text-amber-400 hover:bg-zinc-700 transition-colors"
+                title="Filas grandes"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                </svg>
+              </button>
+
+              <button
                 onClick={() => setShowLogs(true)}
                 className="p-2 sm:px-3 sm:py-2 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:bg-zinc-700 transition-colors"
                 title="Logs de notificações"
@@ -373,7 +385,7 @@ export default function Home() {
           </div>
         ) : (
           <>
-            <SearchBar />
+            <SearchBar userRole={userRole} />
 
             {data && (
               <TotalSummary
@@ -464,6 +476,7 @@ export default function Home() {
         />
       )}
 
+      <QueuePanel isOpen={showQueues} onClose={() => setShowQueues(false)} isAdmin={isAdmin} />
       <LogsPanel isOpen={showLogs} onClose={() => setShowLogs(false)} isAdmin={isAdmin} />
 
       {isAdmin && (

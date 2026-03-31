@@ -76,9 +76,22 @@ export interface SearchResult {
 
 export interface NotificationLog {
   id: string;
-  type: "server_error" | "server_unhealthy" | "disconnect_alert";
+  type: "server_error" | "server_unhealthy" | "disconnect_alert" | "queue_alert";
   server: string;
   message: string;
   timestamp: string;
   details?: Record<string, unknown>;
+}
+
+export interface QueueEntry {
+  server: string;
+  instanceName: string;
+  number: string;
+  token: string;
+  pending: number;
+  status: string;
+  processingNow: boolean;
+  sessionReady: boolean;
+  resetting: boolean;
+  checkedAt: string;
 }

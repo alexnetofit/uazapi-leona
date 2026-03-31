@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServers, getSnapshot, saveSnapshot, setLastPoll } from "@/lib/kv";
-import { fetchServerStatus, fetchAllInstances } from "@/lib/uazapi";
+import { getServers, saveSnapshot, setLastPoll, getCachedDc } from "@/lib/kv";
+import { fetchAllInstances, isConnected } from "@/lib/uazapi";
 import { ServerSnapshot } from "@/lib/types";
 
 export const maxDuration = 30;
@@ -26,9 +26,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let serverStatus;
+    let instances;
     try {
-      serverStatus = await fetchServerStatus(server.name);
+      instances = await fetchAllInstances(server.name, server.token);
     } catch {
       return NextResponse.json({
         server: server.name,
@@ -36,23 +36,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    if (!serverStatus.isHealthy) {
-      return NextResponse.json({
-        server: server.name,
-        status: "unhealthy",
-        connectedInstances: serverStatus.connectedInstances,
-      });
-    }
-
-    const connectedInstances = serverStatus.connectedInstances;
+    const totalInstances = instances.length;
+    const connectedInstances = instances.filter(isConnected).length;
     const now = new Date().toISOString();
-
-    const [totalInstances] = await Promise.all([
-      fetchAllInstances(server.name, server.token)
-        .then((inst) => inst.length)
-        .catch(() => connectedInstances),
-      getSnapshot(server.name),
-    ]);
+    const dc = await getCachedDc(server.name);
 
     const newSnapshot: ServerSnapshot = {
       serverName: server.name,
@@ -61,7 +48,7 @@ export async function POST(request: NextRequest) {
       connectedInstances,
       disconnectedInstances: totalInstances - connectedInstances,
       timestamp: now,
-      dc: serverStatus.dc,
+      dc,
     };
 
     await saveSnapshot(newSnapshot);

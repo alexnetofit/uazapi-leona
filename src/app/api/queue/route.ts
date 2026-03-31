@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServers } from "@/lib/kv";
 import { fetchAllInstances, getInstanceNumber } from "@/lib/uazapi";
+import { getUserRole } from "@/lib/api-auth";
 
 async function resolveInstanceToken(
   serverName: string,
@@ -22,7 +23,8 @@ async function resolveInstanceToken(
 
 export async function POST(request: NextRequest) {
   try {
-    const { action, server, number, instanceToken } = await request.json();
+    const body = await request.json();
+    const { action, server, number, instanceToken } = body;
 
     if (!server || !number) {
       return NextResponse.json(
@@ -45,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "check") {
-      return handleCheckQueue(server, token, number);
+      return handleCheckQueue(server, token);
     }
 
     if (action === "reduce-delay") {
@@ -54,6 +56,17 @@ export async function POST(request: NextRequest) {
 
     if (action === "reset-instance") {
       return handleResetInstance(server, token);
+    }
+
+    if (action === "clear-queue") {
+      const role = getUserRole(request);
+      if (role !== "admin") {
+        return NextResponse.json(
+          { error: "Acesso restrito ao administrador" },
+          { status: 403 }
+        );
+      }
+      return handleClearQueue(server, token);
     }
 
     return NextResponse.json({ error: "Ação inválida" }, { status: 400 });
@@ -66,37 +79,34 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function handleCheckQueue(
-  serverName: string,
-  instanceToken: string,
-  number: string
-) {
-  const url = `https://${serverName}.uazapi.com/send/text`;
-  const body = { number, text: "teste envio", async: true };
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-      token: instanceToken,
-    },
-    body: JSON.stringify(body),
-  });
+async function handleCheckQueue(serverName: string, instanceToken: string) {
+  const res = await fetch(
+    `https://${serverName}.uazapi.com/message/async`,
+    {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        token: instanceToken,
+      },
+    }
+  );
 
   const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
     return NextResponse.json(
-      { error: `Erro ao verificar fila (${res.status})`, details: data, request: { url, body } },
+      { error: `Erro ao verificar fila (${res.status})`, details: data },
       { status: res.status }
     );
   }
 
   return NextResponse.json({
     success: true,
-    queuePosition: data.queuePosition ?? null,
-    data,
+    pending: data.pending ?? 0,
+    status: data.status ?? "unknown",
+    processingNow: data.processingNow ?? false,
+    sessionReady: data.sessionReady ?? false,
+    resetting: data.resetting ?? false,
   });
 }
 
@@ -146,6 +156,30 @@ async function handleResetInstance(serverName: string, instanceToken: string) {
   if (!res.ok) {
     return NextResponse.json(
       { error: "Erro ao reiniciar instância", details: data },
+      { status: res.status }
+    );
+  }
+
+  return NextResponse.json({ success: true, data });
+}
+
+async function handleClearQueue(serverName: string, instanceToken: string) {
+  const res = await fetch(
+    `https://${serverName}.uazapi.com/message/async`,
+    {
+      method: "DELETE",
+      headers: {
+        Accept: "application/json",
+        token: instanceToken,
+      },
+    }
+  );
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    return NextResponse.json(
+      { error: "Erro ao apagar fila", details: data },
       { status: res.status }
     );
   }

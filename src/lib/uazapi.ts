@@ -103,6 +103,48 @@ export async function fetchAllInstances(
   return [];
 }
 
+export interface QueueStatus {
+  status: string;
+  pending: number;
+  processingNow: boolean;
+  acceptingNewMessages: boolean;
+  sessionReady: boolean;
+  resetting: boolean;
+}
+
+export async function fetchQueueStatus(
+  serverName: string,
+  instanceToken: string
+): Promise<QueueStatus> {
+  const url = `https://${serverName}.uazapi.com/message/async`;
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      token: instanceToken,
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Erro ao buscar fila: ${response.status} ${response.statusText}`
+    );
+  }
+
+  const data = await response.json();
+
+  return {
+    status: data.status || "unknown",
+    pending: data.pending ?? 0,
+    processingNow: data.processingNow ?? false,
+    acceptingNewMessages: data.acceptingNewMessages ?? true,
+    sessionReady: data.sessionReady ?? false,
+    resetting: data.resetting ?? false,
+  };
+}
+
 export function isConnected(instance: Instance): boolean {
   const status = (instance.status || "").toLowerCase();
   return status === "connected";

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServers, getSnapshotsByNames, batchSaveSnapshots, getWebhookUrl, setLastPoll, saveLog } from "@/lib/kv";
-import { fetchServerStatus, fetchAllInstances } from "@/lib/uazapi";
+import { getServers, getSnapshotsByNames, batchSaveSnapshots, getWebhookUrl, setLastPoll, saveLog, getCachedDc, saveDcCache, getDcLastFetch, setDcLastFetch, shouldFetchDcToday } from "@/lib/kv";
+import { fetchServerStatus, fetchAllInstances, isConnected } from "@/lib/uazapi";
 import { sendPushToAll } from "@/lib/push";
 import { ServerSnapshot, WebhookAlert } from "@/lib/types";
 
@@ -40,146 +40,93 @@ export async function GET(request: NextRequest) {
     }
 
     const serverNames = servers.map((s) => s.name);
-    const [snapshotsMap, webhookUrl] = await Promise.all([
+    const [snapshotsMap, webhookUrl, dcLastFetch] = await Promise.all([
       getSnapshotsByNames(serverNames),
       getWebhookUrl(),
+      getDcLastFetch(),
     ]);
 
+    const needDcFetch = shouldFetchDcToday(dcLastFetch);
     const newSnapshots: ServerSnapshot[] = [];
 
     const results = await Promise.all(
       servers.map(async (server) => {
         try {
-          let serverStatus;
-          let statusError: unknown = null;
-
-          for (let attempt = 1; attempt <= 2; attempt++) {
-            try {
-              serverStatus = await fetchServerStatus(server.name);
-              statusError = null;
-              break;
-            } catch (err) {
-              statusError = err;
-              console.error(
-                `Tentativa ${attempt}/2 /status falhou para ${server.name}:`,
-                err
-              );
-              if (attempt < 2) {
-                await new Promise((r) => setTimeout(r, 3000));
-              }
-            }
-          }
-
           const previousSnapshot = snapshotsMap.get(server.name) || null;
 
-          if (statusError || !serverStatus) {
-            console.error(
-              `Servidor ${server.name} inacessível após 2 tentativas`
-            );
+          let instances;
+          try {
+            instances = await fetchAllInstances(server.name, server.token);
+          } catch (err) {
+            // Retry once
+            try {
+              await new Promise((r) => setTimeout(r, 3000));
+              instances = await fetchAllInstances(server.name, server.token);
+            } catch (retryErr) {
+              console.error(
+                `Servidor ${server.name} inacessível após 2 tentativas`
+              );
 
-            await sendPushToAll({
-              title: `Servidor ${server.name} inacessível`,
-              body: `Não foi possível conectar após 2 tentativas.`,
-              tag: `error-${server.name}`,
-            });
+              await sendPushToAll({
+                title: `Servidor ${server.name} inacessível`,
+                body: `Não foi possível conectar após 2 tentativas.`,
+                tag: `error-${server.name}`,
+              });
 
-            if (webhookUrl) {
-              try {
-                await fetch(webhookUrl, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    server: server.name,
-                    type: "server_error",
-                    message: `Servidor ${server.name} inacessível após 2 tentativas`,
-                    error: statusError instanceof Error ? statusError.message : String(statusError),
-                    timestamp: new Date().toISOString(),
-                    last_known_total: previousSnapshot?.totalInstances ?? null,
-                    last_known_connected: previousSnapshot?.connectedInstances ?? null,
-                  }),
-                });
-              } catch (webhookError) {
-                console.error(
-                  `Erro ao enviar webhook de erro para ${server.name}:`,
-                  webhookError
-                );
+              if (webhookUrl) {
+                try {
+                  await fetch(webhookUrl, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      server: server.name,
+                      type: "server_error",
+                      message: `Servidor ${server.name} inacessível após 2 tentativas`,
+                      error: retryErr instanceof Error ? retryErr.message : String(retryErr),
+                      timestamp: new Date().toISOString(),
+                      last_known_total: previousSnapshot?.totalInstances ?? null,
+                      last_known_connected: previousSnapshot?.connectedInstances ?? null,
+                    }),
+                  });
+                } catch (webhookError) {
+                  console.error(
+                    `Erro ao enviar webhook de erro para ${server.name}:`,
+                    webhookError
+                  );
+                }
               }
+
+              await saveLog({
+                id: `${Date.now()}-${server.name}-error`,
+                type: "server_error",
+                server: server.name,
+                message: `Servidor inacessível após 2 tentativas`,
+                timestamp: new Date().toISOString(),
+                details: {
+                  error: retryErr instanceof Error ? retryErr.message : String(retryErr),
+                  last_known_total: previousSnapshot?.totalInstances ?? null,
+                  last_known_connected: previousSnapshot?.connectedInstances ?? null,
+                },
+              });
+
+              return { server: server.name, status: "error" as const, alert: true };
             }
-
-            await saveLog({
-              id: `${Date.now()}-${server.name}-error`,
-              type: "server_error",
-              server: server.name,
-              message: `Servidor inacessível após 2 tentativas`,
-              timestamp: new Date().toISOString(),
-              details: {
-                error: statusError instanceof Error ? statusError.message : String(statusError),
-                last_known_total: previousSnapshot?.totalInstances ?? null,
-                last_known_connected: previousSnapshot?.connectedInstances ?? null,
-              },
-            });
-
-            return { server: server.name, status: "error" as const, alert: true };
           }
 
-          if (!serverStatus.isHealthy) {
-            await sendPushToAll({
-              title: `Servidor ${server.name} não saudável`,
-              body: `Health check falhou. Conectadas: ${serverStatus.connectedInstances}`,
-              tag: `unhealthy-${server.name}`,
-            });
-
-            if (webhookUrl) {
-              try {
-                await fetch(webhookUrl, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    server: server.name,
-                    type: "server_unhealthy",
-                    message: `Servidor ${server.name} não saudável`,
-                    connected_now: serverStatus.connectedInstances,
-                    timestamp: new Date().toISOString(),
-                    last_known_total: previousSnapshot?.totalInstances ?? null,
-                    last_known_connected: previousSnapshot?.connectedInstances ?? null,
-                  }),
-                });
-              } catch (webhookError) {
-                console.error(
-                  `Erro ao enviar webhook unhealthy para ${server.name}:`,
-                  webhookError
-                );
-              }
-            }
-
-            await saveLog({
-              id: `${Date.now()}-${server.name}-unhealthy`,
-              type: "server_unhealthy",
-              server: server.name,
-              message: `Health check falhou. Conectadas: ${serverStatus.connectedInstances}`,
-              timestamp: new Date().toISOString(),
-              details: {
-                connected_now: serverStatus.connectedInstances,
-                last_known_total: previousSnapshot?.totalInstances ?? null,
-                last_known_connected: previousSnapshot?.connectedInstances ?? null,
-              },
-            });
-
-            return { server: server.name, status: "unhealthy" as const, alert: true };
-          }
-
-          const connectedInstances = serverStatus.connectedInstances;
+          const totalInstances = instances.length;
+          const connectedInstances = instances.filter(isConnected).length;
           const now = new Date().toISOString();
 
-          const totalInstances = await fetchAllInstances(server.name, server.token)
-            .then((inst) => inst.length)
-            .catch((err) => {
-              console.error(
-                `Falha ao buscar /instance/all para ${server.name}:`,
-                err
-              );
-              return connectedInstances;
-            });
+          let dc = await getCachedDc(server.name);
+          if (needDcFetch) {
+            try {
+              const serverStatus = await fetchServerStatus(server.name);
+              dc = serverStatus.dc || "";
+              await saveDcCache(server.name, dc);
+            } catch {
+              // DC fetch failed, use cached value
+            }
+          }
 
           let alertTriggered = false;
 
@@ -241,7 +188,7 @@ export async function GET(request: NextRequest) {
             connectedInstances,
             disconnectedInstances: totalInstances - connectedInstances,
             timestamp: now,
-            dc: serverStatus.dc,
+            dc,
           };
 
           newSnapshots.push(newSnapshot);
@@ -260,6 +207,10 @@ export async function GET(request: NextRequest) {
         }
       })
     );
+
+    if (needDcFetch) {
+      await setDcLastFetch(new Date().toISOString());
+    }
 
     await Promise.all([
       batchSaveSnapshots(newSnapshots, snapshotsMap),
