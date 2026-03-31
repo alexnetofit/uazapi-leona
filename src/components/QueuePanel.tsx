@@ -29,6 +29,75 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   resetting: { label: "Reiniciando", color: "text-red-400" },
 };
 
+interface TierConfig {
+  title: string;
+  min: number;
+  max: number | null;
+  accentColor: string;
+  badgeBg: string;
+  badgeText: string;
+  borderColor: string;
+  bgColor: string;
+  pendingColor: string;
+  icon: React.ReactNode;
+}
+
+const TIERS: TierConfig[] = [
+  {
+    title: "Alerta",
+    min: 21,
+    max: null,
+    accentColor: "text-red-400",
+    badgeBg: "bg-red-950/60",
+    badgeText: "text-red-400",
+    borderColor: "border-red-900/50",
+    bgColor: "bg-red-950/10",
+    pendingColor: "text-red-400",
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+        <line x1="12" y1="9" x2="12" y2="13" />
+        <line x1="12" y1="17" x2="12.01" y2="17" />
+      </svg>
+    ),
+  },
+  {
+    title: "Atenção",
+    min: 11,
+    max: 20,
+    accentColor: "text-amber-400",
+    badgeBg: "bg-amber-950/60",
+    badgeText: "text-amber-400",
+    borderColor: "border-amber-900/40",
+    bgColor: "bg-amber-950/10",
+    pendingColor: "text-amber-400",
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
+      </svg>
+    ),
+  },
+  {
+    title: "Monitorar",
+    min: 5,
+    max: 10,
+    accentColor: "text-blue-400",
+    badgeBg: "bg-blue-950/60",
+    badgeText: "text-blue-400",
+    borderColor: "border-blue-900/40",
+    bgColor: "bg-blue-950/10",
+    pendingColor: "text-blue-400",
+    icon: (
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    ),
+  },
+];
+
 export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps) {
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [lastCheck, setLastCheck] = useState<string | null>(null);
@@ -40,7 +109,7 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
       const res = await fetch("/api/queue-monitor/data");
       if (res.ok) {
         const data = await res.json();
-        const filtered = (data.entries || []).filter((e: QueueEntry) => e.pending > 20);
+        const filtered = (data.entries || []).filter((e: QueueEntry) => e.pending >= 5);
         filtered.sort((a: QueueEntry, b: QueueEntry) => b.pending - a.pending);
         setEntries(filtered);
         setLastCheck(data.lastCheck || null);
@@ -82,7 +151,17 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
     return STATUS_LABELS[status] || { label: status, color: "text-zinc-400" };
   };
 
+  const getEntriesForTier = (tier: TierConfig) => {
+    return entries.filter((e) => {
+      if (tier.max === null) return e.pending >= tier.min;
+      return e.pending >= tier.min && e.pending <= tier.max;
+    });
+  };
+
   if (!isOpen) return null;
+
+  const totalCount = entries.length;
+  const hasAnyData = !loading || entries.length > 0;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -94,11 +173,11 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
               <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
             </svg>
             <h2 className="text-sm font-semibold text-zinc-100">
-              Filas Grandes
+              Monitor de Filas
             </h2>
-            {entries.length > 0 && (
-              <span className="text-[10px] bg-red-950/60 text-red-400 px-1.5 py-0.5 rounded font-medium">
-                {entries.length}
+            {totalCount > 0 && (
+              <span className="text-[10px] bg-zinc-800 text-zinc-300 px-1.5 py-0.5 rounded font-medium">
+                {totalCount}
               </span>
             )}
           </div>
@@ -135,71 +214,93 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
                 <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" />
               </svg>
             </div>
-          ) : entries.length === 0 ? (
+          ) : !hasAnyData || totalCount === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 px-4">
               <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-700 mb-3">
                 <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
               </svg>
-              <p className="text-sm text-zinc-500">Nenhuma instância com fila grande</p>
+              <p className="text-sm text-zinc-500">Nenhuma instância com fila significativa</p>
               <p className="text-xs text-zinc-600 mt-1">
-                Instâncias com mais de 20 mensagens na fila aparecerão aqui
+                Instâncias com 5 ou mais mensagens na fila aparecerão aqui
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-zinc-800/50">
-              {entries.map((entry, i) => {
-                const statusInfo = getStatusInfo(entry.status);
+            <div className="p-3 space-y-4">
+              {TIERS.map((tier) => {
+                const tierEntries = getEntriesForTier(tier);
+                if (tierEntries.length === 0) return null;
                 return (
-                  <div
-                    key={`${entry.server}-${entry.number}-${i}`}
-                    className="px-4 py-3 border-l-2 bg-amber-950/10 border-amber-900/40"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-zinc-100">
-                          {entry.number || entry.instanceName}
-                        </span>
-                        <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded">
-                          {entry.server}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-lg font-bold text-amber-400">
-                          {entry.pending}
-                        </span>
-                        <span className="text-[10px] text-zinc-500">na fila</span>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 text-[10px]">
-                      <span className={`${statusInfo.color} bg-zinc-800/80 px-1.5 py-0.5 rounded`}>
-                        {statusInfo.label}
+                  <div key={tier.title}>
+                    <div className="flex items-center gap-2 mb-2 px-1">
+                      <span className={tier.accentColor}>{tier.icon}</span>
+                      <h3 className={`text-xs font-semibold ${tier.accentColor}`}>
+                        {tier.title}
+                      </h3>
+                      <span className={`text-[10px] ${tier.badgeBg} ${tier.badgeText} px-1.5 py-0.5 rounded font-medium`}>
+                        {tierEntries.length}
                       </span>
-                      {entry.processingNow && (
-                        <span className="text-blue-400 bg-zinc-800/80 px-1.5 py-0.5 rounded">
-                          Processando agora
-                        </span>
-                      )}
-                      {entry.resetting && (
-                        <span className="text-red-400 bg-zinc-800/80 px-1.5 py-0.5 rounded">
-                          Reiniciando
-                        </span>
-                      )}
-                      {!entry.sessionReady && (
-                        <span className="text-orange-400 bg-zinc-800/80 px-1.5 py-0.5 rounded">
-                          Sessão não pronta
-                        </span>
-                      )}
+                      <span className="text-[10px] text-zinc-600">
+                        ({tier.max ? `${tier.min}–${tier.max}` : `${tier.min}+`} na fila)
+                      </span>
                     </div>
+                    <div className={`rounded-lg border ${tier.borderColor} overflow-hidden divide-y divide-zinc-800/50`}>
+                      {tierEntries.map((entry, i) => {
+                        const statusInfo = getStatusInfo(entry.status);
+                        return (
+                          <div
+                            key={`${entry.server}-${entry.number}-${i}`}
+                            className={`px-3 py-2.5 ${tier.bgColor}`}
+                          >
+                            <div className="flex items-center justify-between mb-1.5">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-sm font-semibold text-zinc-100 truncate">
+                                  {entry.number || entry.instanceName}
+                                </span>
+                                <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded shrink-0">
+                                  {entry.server}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                <span className={`text-lg font-bold ${tier.pendingColor}`}>
+                                  {entry.pending}
+                                </span>
+                                <span className="text-[10px] text-zinc-500">na fila</span>
+                              </div>
+                            </div>
 
-                    {isAdmin && entry.token && (
-                      <div className="mt-2 flex items-center gap-1">
-                        <span className="text-[10px] text-zinc-500">Token:</span>
-                        <code className="text-[10px] text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded font-mono break-all">
-                          {entry.token}
-                        </code>
-                      </div>
-                    )}
+                            <div className="flex flex-wrap gap-1.5 text-[10px]">
+                              <span className={`${statusInfo.color} bg-zinc-800/80 px-1.5 py-0.5 rounded`}>
+                                {statusInfo.label}
+                              </span>
+                              {entry.processingNow && (
+                                <span className="text-blue-400 bg-zinc-800/80 px-1.5 py-0.5 rounded">
+                                  Processando agora
+                                </span>
+                              )}
+                              {entry.resetting && (
+                                <span className="text-red-400 bg-zinc-800/80 px-1.5 py-0.5 rounded">
+                                  Reiniciando
+                                </span>
+                              )}
+                              {!entry.sessionReady && (
+                                <span className="text-orange-400 bg-zinc-800/80 px-1.5 py-0.5 rounded">
+                                  Sessão não pronta
+                                </span>
+                              )}
+                            </div>
+
+                            {isAdmin && entry.token && (
+                              <div className="mt-1.5 flex items-center gap-1">
+                                <span className="text-[10px] text-zinc-500">Token:</span>
+                                <code className="text-[10px] text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded font-mono break-all">
+                                  {entry.token}
+                                </code>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })}
