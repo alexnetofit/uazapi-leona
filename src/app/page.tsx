@@ -34,7 +34,7 @@ export default function Home() {
   const [showQueues, setShowQueues] = useState(false);
   const [showGroups, setShowGroups] = useState(false);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
-  const [refreshingServer, setRefreshingServer] = useState<string | null>(null);
+  const [refreshingServers, setRefreshingServers] = useState<Set<string>>(new Set());
   const router = useRouter();
 
   const isAdmin = userRole === "admin";
@@ -138,20 +138,30 @@ export default function Home() {
     const serverList = data?.servers ?? [];
 
     if (serverList.length > 0) {
-      for (const server of serverList) {
-        setRefreshingServer(server.serverName);
-        try {
-          await fetch("/api/poll/server", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ serverName: server.serverName }),
-          });
-          await fetchStatus();
-        } catch (err) {
-          console.error(`Erro ao pollar ${server.serverName}:`, err);
-        }
-      }
-      setRefreshingServer(null);
+      const serverNames = serverList.map((s) => s.serverName);
+      setRefreshingServers(new Set(serverNames));
+
+      await Promise.allSettled(
+        serverList.map(async (server) => {
+          try {
+            await fetch("/api/poll/server", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ serverName: server.serverName }),
+            });
+          } catch (err) {
+            console.error(`Erro ao pollar ${server.serverName}:`, err);
+          } finally {
+            setRefreshingServers((prev) => {
+              const next = new Set(prev);
+              next.delete(server.serverName);
+              return next;
+            });
+          }
+        })
+      );
+
+      setRefreshingServers(new Set());
     } else {
       await triggerPoll();
     }
@@ -286,7 +296,7 @@ export default function Home() {
                     <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
                     <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
                   </svg>
-                  <span className="hidden sm:inline">{refreshingServer ? `Atualizando ${refreshingServer}...` : loading ? "Atualizando..." : "Atualizar"}</span>
+                  <span className="hidden sm:inline">{refreshingServers.size > 0 ? `Atualizando ${refreshingServers.size}...` : loading ? "Atualizando..." : "Atualizar"}</span>
                 </button>
               )}
 
@@ -413,7 +423,7 @@ export default function Home() {
                       previous={server.previous ?? null}
                       error={server.error}
                       dc={server.dc}
-                      isRefreshing={refreshingServer === server.serverName}
+                      isRefreshing={refreshingServers.has(server.serverName)}
                       onRemove={isAdmin ? handleRemoveServer : undefined}
                     />
                   ))}

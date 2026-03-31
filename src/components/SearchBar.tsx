@@ -6,6 +6,8 @@ import { UserRole } from "@/lib/auth";
 
 interface SearchResult {
   found: boolean;
+  results?: { server: string; instance: Instance }[];
+  // legacy single-result format
   server?: string;
   instance?: Instance;
 }
@@ -34,25 +36,12 @@ export default function SearchBar({ userRole }: SearchBarProps) {
   const [results, setResults] = useState<ResultEntry[]>([]);
   const [error, setError] = useState("");
   const [searchExhausted, setSearchExhausted] = useState(false);
-  const [moreLoading, setMoreLoading] = useState(false);
 
   const isAdmin = userRole === "admin";
 
   const normalizeNumber = (input: string): string => {
     const digitsOnly = input.replace(/\D/g, "");
     return digitsOnly.length > 8 ? digitsOnly.slice(-8) : digitsOnly;
-  };
-
-  const doSearch = async (skipServers: string[]): Promise<SearchResult> => {
-    const cleaned = normalizeNumber(query);
-    let url = `/api/search?number=${encodeURIComponent(cleaned)}`;
-    if (skipServers.length > 0) {
-      url += `&skipServers=${encodeURIComponent(skipServers.join(","))}`;
-    }
-    const res = await fetch(url);
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Erro na busca");
-    return data;
   };
 
   const newResultEntry = (server: string, instance: Instance): ResultEntry => ({
@@ -82,10 +71,13 @@ export default function SearchBar({ userRole }: SearchBarProps) {
     setLoading(true);
 
     try {
-      const data = await doSearch([]);
+      const url = `/api/search?number=${encodeURIComponent(cleaned)}`;
+      const res = await fetch(url);
+      const data: SearchResult = await res.json();
+      if (!res.ok) throw new Error((data as unknown as { error: string }).error || "Erro na busca");
 
-      if (data.found && data.server && data.instance) {
-        setResults([newResultEntry(data.server, data.instance)]);
+      if (data.found && data.results && data.results.length > 0) {
+        setResults(data.results.map((r) => newResultEntry(r.server, r.instance)));
       } else {
         setSearchExhausted(true);
       }
@@ -93,29 +85,6 @@ export default function SearchBar({ userRole }: SearchBarProps) {
       setError(err instanceof Error ? err.message : "Erro ao conectar com o servidor");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleSearchMore = async () => {
-    const skipServers = results.map((r) => r.server);
-    setMoreLoading(true);
-    setError("");
-
-    try {
-      const data = await doSearch(skipServers);
-
-      if (data.found && data.server && data.instance) {
-        setResults((prev) => [
-          ...prev,
-          newResultEntry(data.server!, data.instance!),
-        ]);
-      } else {
-        setSearchExhausted(true);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao buscar em mais servidores");
-    } finally {
-      setMoreLoading(false);
     }
   };
 
@@ -426,44 +395,9 @@ export default function SearchBar({ userRole }: SearchBarProps) {
             </div>
           ))}
 
-          {!searchExhausted && (
-            <button
-              onClick={handleSearchMore}
-              disabled={moreLoading}
-              className="w-full px-4 py-2.5 rounded-xl border border-zinc-700 bg-zinc-800/50 text-zinc-300 text-sm font-medium hover:bg-zinc-800 hover:border-zinc-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-            >
-              {moreLoading ? (
-                <>
-                  <svg
-                    className="animate-spin h-4 w-4"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                  >
-                    <circle
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                      className="opacity-25"
-                    />
-                    <path
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                      className="opacity-75"
-                    />
-                  </svg>
-                  Buscando...
-                </>
-              ) : (
-                "Buscar em mais servidores"
-              )}
-            </button>
-          )}
-
-          {searchExhausted && results.length > 0 && (
+          {results.length > 1 && (
             <div className="bg-zinc-800/50 text-zinc-500 text-xs px-4 py-2 rounded-xl text-center">
-              Não encontrado em mais servidores
+              Encontrado em {results.length} servidores
             </div>
           )}
         </div>

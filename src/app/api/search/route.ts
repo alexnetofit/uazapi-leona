@@ -40,9 +40,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(result);
     }
 
-    for (const server of filteredServers) {
-      try {
+    const role = getUserRole(request);
+
+    const results = await Promise.allSettled(
+      filteredServers.map(async (server) => {
         const instances = await fetchAllInstances(server.name, server.token);
+        const matches: { server: string; instance: Instance }[] = [];
 
         for (const instance of instances) {
           const instanceNumber = getInstanceNumber(instance);
@@ -52,30 +55,34 @@ export async function GET(request: NextRequest) {
             instanceNumber.includes(searchTerm) ||
             instanceName.includes(searchTerm)
           ) {
-            const role = getUserRole(request);
             let safeInstance: Partial<Instance> = instance;
-
             if (role !== "admin") {
               const { token, paircode, qrcode, id, ...rest } = instance;
               safeInstance = rest;
             }
-
-            const result: SearchResult = {
-              found: true,
-              server: server.name,
-              instance: safeInstance as Instance,
-            };
-            return NextResponse.json(result);
+            matches.push({ server: server.name, instance: safeInstance as Instance });
           }
         }
-      } catch (error) {
-        console.error(`Erro ao buscar no servidor ${server.name}:`, error);
-        // Continuar para o próximo servidor
+
+        return matches;
+      })
+    );
+
+    const allMatches: { server: string; instance: Instance }[] = [];
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        allMatches.push(...result.value);
       }
     }
 
-    const result: SearchResult = { found: false };
-    return NextResponse.json(result);
+    if (allMatches.length === 0) {
+      return NextResponse.json({ found: false, results: [] });
+    }
+
+    return NextResponse.json({
+      found: true,
+      results: allMatches,
+    });
   } catch (error) {
     console.error("Erro na busca:", error);
     return NextResponse.json(
