@@ -7,7 +7,7 @@ export const maxDuration = 60;
 
 const QUEUE_ALERT_THRESHOLD = 20;
 const FETCH_TIMEOUT_MS = 8000;
-const CONCURRENCY_PER_SERVER = 20;
+const CONCURRENCY_PER_SERVER = 50;
 
 type InstanceItem = { server: string; name: string; owner: string; token: string };
 type CheckResult =
