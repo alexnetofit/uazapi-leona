@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServers, getConnectedInstances } from "@/lib/kv";
+import { getServers, getConnectedInstances, getQueueData } from "@/lib/kv";
 import { fetchAllInstances, getInstanceNumber } from "@/lib/uazapi";
 import { getUserRole } from "@/lib/api-auth";
 
@@ -235,62 +235,95 @@ async function handleClearQueue(serverName: string, instanceToken: string) {
   return NextResponse.json({ success: true, data });
 }
 
-const BATCH_CONCURRENCY = 20;
-const BATCH_TIMEOUT_MS = 8000;
+const BATCH_CHECK_TIMEOUT_MS = 6000;
 
 async function handleBatchCheckAll() {
-  const allInstances = await getConnectedInstances();
+  const cachedEntries = await getQueueData();
 
-  if (allInstances.length === 0) {
+  if (cachedEntries.length === 0) {
     return NextResponse.json({ results: [] });
   }
 
-  const results: Record<string, unknown>[] = [];
+  const toCheck = cachedEntries.filter((e) => e.token);
 
-  for (let i = 0; i < allInstances.length; i += BATCH_CONCURRENCY) {
-    const batch = allInstances.slice(i, i + BATCH_CONCURRENCY);
-    const batchResults = await Promise.allSettled(
-      batch.map(async (inst) => {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), BATCH_TIMEOUT_MS);
-        try {
-          const res = await fetch(
-            `https://${inst.server}.uazapi.com/message/async`,
-            {
-              method: "GET",
-              headers: { Accept: "application/json", token: inst.token },
-              signal: controller.signal,
-            }
-          );
-          clearTimeout(timeout);
-          if (!res.ok) return null;
-          const data = await res.json();
-          const q = data.queue || data;
-          return {
-            number: inst.owner,
-            server: inst.server,
-            name: inst.name,
-            token: inst.token,
-            pending: q.pending ?? 0,
-            status: q.status ?? "unknown",
-            processingNow: q.processingNow ?? false,
-            sessionReady: q.sessionReady ?? false,
-            resetting: q.resetting ?? false,
-          };
-        } catch {
-          clearTimeout(timeout);
-          return null;
-        }
-      })
-    );
-
-    for (const r of batchResults) {
-      if (r.status === "fulfilled" && r.value && r.value.pending > 0) {
-        results.push(r.value);
-      }
-    }
+  if (toCheck.length === 0) {
+    return NextResponse.json({
+      results: cachedEntries.map((e) => ({
+        number: e.number,
+        server: e.server,
+        name: e.instanceName,
+        token: e.token,
+        pending: e.pending,
+        status: e.status,
+        processingNow: e.processingNow,
+        sessionReady: e.sessionReady,
+        resetting: e.resetting,
+      })),
+    });
   }
 
-  results.sort((a, b) => (b.pending as number) - (a.pending as number));
-  return NextResponse.json({ results });
+  const results = await Promise.allSettled(
+    toCheck.map(async (entry) => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), BATCH_CHECK_TIMEOUT_MS);
+      try {
+        const res = await fetch(
+          `https://${entry.server}.uazapi.com/message/async`,
+          {
+            method: "GET",
+            headers: { Accept: "application/json", token: entry.token },
+            signal: controller.signal,
+          }
+        );
+        clearTimeout(timeout);
+        if (!res.ok) {
+          return {
+            number: entry.number,
+            server: entry.server,
+            name: entry.instanceName,
+            token: entry.token,
+            pending: entry.pending,
+            status: entry.status,
+            processingNow: entry.processingNow,
+            sessionReady: entry.sessionReady,
+            resetting: entry.resetting,
+          };
+        }
+        const data = await res.json();
+        const q = data.queue || data;
+        return {
+          number: entry.number,
+          server: entry.server,
+          name: entry.instanceName,
+          token: entry.token,
+          pending: q.pending ?? 0,
+          status: q.status ?? "unknown",
+          processingNow: q.processingNow ?? false,
+          sessionReady: q.sessionReady ?? false,
+          resetting: q.resetting ?? false,
+        };
+      } catch {
+        clearTimeout(timeout);
+        return {
+          number: entry.number,
+          server: entry.server,
+          name: entry.instanceName,
+          token: entry.token,
+          pending: entry.pending,
+          status: entry.status,
+          processingNow: entry.processingNow,
+          sessionReady: entry.sessionReady,
+          resetting: entry.resetting,
+        };
+      }
+    })
+  );
+
+  const checked = results
+    .filter((r) => r.status === "fulfilled")
+    .map((r) => (r as PromiseFulfilledResult<Record<string, unknown>>).value)
+    .filter((r) => (r.pending as number) > 0);
+
+  checked.sort((a, b) => (b.pending as number) - (a.pending as number));
+  return NextResponse.json({ results: checked });
 }
