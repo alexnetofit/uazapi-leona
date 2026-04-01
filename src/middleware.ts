@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySession } from "@/lib/auth";
 
-const PUBLIC_PATHS = [
+const PUBLIC_PREFIX_PATHS = [
   "/api/auth/login",
   "/api/poll",
-  "/api/queue-monitor",
   "/login",
 ];
 
+const PUBLIC_EXACT_PATHS = [
+  "/api/queue-monitor",
+];
+
 function isPublicPath(pathname: string): boolean {
-  return PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+  if (PUBLIC_EXACT_PATHS.includes(pathname)) return true;
+  return PUBLIC_PREFIX_PATHS.some((p) => pathname.startsWith(p));
 }
 
 function isStaticAsset(pathname: string): boolean {
