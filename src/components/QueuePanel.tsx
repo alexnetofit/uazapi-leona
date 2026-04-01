@@ -150,6 +150,70 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
     }
   }, []);
 
+  const refreshEntries = useCallback(async () => {
+    if (entries.length === 0) {
+      await fetchData();
+      return;
+    }
+
+    const toCheck = entries.filter((e) => e.token);
+    if (toCheck.length === 0) {
+      await fetchData();
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch("/api/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "batch-check",
+          instances: toCheck.map((e) => ({
+            server: e.server,
+            token: e.token,
+            number: e.number,
+          })),
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const resultsMap = new Map<string, Record<string, unknown>>();
+        for (const r of data.results || []) {
+          resultsMap.set(`${r.server}-${r.number}`, r);
+        }
+
+        setEntries((prev) => {
+          const updated = prev.map((entry) => {
+            const fresh = resultsMap.get(entryKey(entry));
+            if (fresh && !fresh.error) {
+              return {
+                ...entry,
+                pending: fresh.pending as number,
+                status: fresh.status as string,
+                processingNow: fresh.processingNow as boolean,
+                sessionReady: fresh.sessionReady as boolean,
+                resetting: fresh.resetting as boolean,
+                checkedAt: new Date().toISOString(),
+              };
+            }
+            return entry;
+          });
+
+          const filtered = updated.filter((e) => e.pending >= 5);
+          filtered.sort((a, b) => b.pending - a.pending);
+          return filtered;
+        });
+        setLastCheck(new Date().toISOString());
+      }
+    } catch (error) {
+      console.error("Erro ao atualizar filas:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [entries, fetchData]);
+
   useEffect(() => {
     if (isOpen) {
       fetchData();
@@ -159,9 +223,9 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
 
   useEffect(() => {
     if (!isOpen) return;
-    const interval = setInterval(fetchData, 60000);
+    const interval = setInterval(refreshEntries, 60000);
     return () => clearInterval(interval);
-  }, [isOpen, fetchData]);
+  }, [isOpen, refreshEntries]);
 
   const handleReduceDelay = async (entry: QueueEntry) => {
     if (!entry.token) return;
@@ -295,7 +359,7 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
               </span>
             )}
             <button
-              onClick={fetchData}
+              onClick={refreshEntries}
               disabled={loading}
               className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors px-2 py-1 rounded hover:bg-zinc-800 disabled:opacity-50"
             >

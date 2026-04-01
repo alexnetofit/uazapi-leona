@@ -26,6 +26,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { action, server, number, instanceToken } = body;
 
+    if (action === "batch-check") {
+      return handleBatchCheck(body.instances || []);
+    }
+
     if (!server || !number) {
       return NextResponse.json(
         { error: "Servidor e número são obrigatórios" },
@@ -77,6 +81,44 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+async function handleBatchCheck(
+  instances: { server: string; token: string; number: string }[]
+) {
+  const results = await Promise.allSettled(
+    instances.map(async (inst) => {
+      try {
+        const res = await fetch(
+          `https://${inst.server}.uazapi.com/message/async`,
+          {
+            method: "GET",
+            headers: { Accept: "application/json", token: inst.token },
+          }
+        );
+        if (!res.ok) return { number: inst.number, server: inst.server, error: true };
+        const data = await res.json();
+        const q = data.queue || data;
+        return {
+          number: inst.number,
+          server: inst.server,
+          pending: q.pending ?? 0,
+          status: q.status ?? "unknown",
+          processingNow: q.processingNow ?? false,
+          sessionReady: q.sessionReady ?? false,
+          resetting: q.resetting ?? false,
+        };
+      } catch {
+        return { number: inst.number, server: inst.server, error: true };
+      }
+    })
+  );
+
+  const checked = results
+    .filter((r) => r.status === "fulfilled")
+    .map((r) => (r as PromiseFulfilledResult<Record<string, unknown>>).value);
+
+  return NextResponse.json({ results: checked });
 }
 
 async function handleCheckQueue(serverName: string, instanceToken: string) {
