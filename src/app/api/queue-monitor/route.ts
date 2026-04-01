@@ -13,7 +13,8 @@ const CONCURRENCY_PER_SERVER = 20;
 type InstanceItem = { server: string; name: string; owner: string; token: string };
 type CheckResult =
   | { success: true; entry: QueueEntry | null }
-  | { success: false; item: InstanceItem };
+  | { success: false; item: InstanceItem }
+  | { skipped: true };
 
 async function checkOneInstance(
   item: InstanceItem,
@@ -31,6 +32,7 @@ async function checkOneInstance(
       }
     );
     clearTimeout(timeout);
+    if (res.status === 404) return { skipped: true };
     if (!res.ok) return { success: false, item };
     const data = await res.json();
     const q = data.queue || data;
@@ -63,10 +65,11 @@ async function checkBatchWithRetry(
   items: InstanceItem[],
   concurrency: number,
   checkedAt: string
-): Promise<{ entries: QueueEntry[]; checked: number; failed: number }> {
+): Promise<{ entries: QueueEntry[]; checked: number; failed: number; skipped: number }> {
   const entries: QueueEntry[] = [];
   let failed: InstanceItem[] = [];
   let totalChecked = 0;
+  let totalSkipped = 0;
 
   for (let i = 0; i < items.length; i += concurrency) {
     const batch = items.slice(i, i + concurrency);
@@ -74,16 +77,19 @@ async function checkBatchWithRetry(
       batch.map((item) => checkOneInstance(item, checkedAt))
     );
 
-    for (const r of results) {
+    for (let j = 0; j < results.length; j++) {
+      const r = results[j];
       if (r.status === "fulfilled") {
-        if (r.value.success) {
+        if ("skipped" in r.value) {
+          totalSkipped++;
+        } else if (r.value.success) {
           totalChecked++;
           if (r.value.entry) entries.push(r.value.entry);
         } else {
           failed.push(r.value.item);
         }
       } else {
-        failed.push(batch[results.indexOf(r)]);
+        failed.push(batch[j]);
       }
     }
   }
@@ -100,7 +106,9 @@ async function checkBatchWithRetry(
 
       for (const r of results) {
         if (r.status === "fulfilled") {
-          if (r.value.success) {
+          if ("skipped" in r.value) {
+            totalSkipped++;
+          } else if (r.value.success) {
             totalChecked++;
             if (r.value.entry) entries.push(r.value.entry);
           } else {
@@ -111,7 +119,7 @@ async function checkBatchWithRetry(
     }
   }
 
-  return { entries, checked: totalChecked, failed: failed.length };
+  return { entries, checked: totalChecked, failed: failed.length, skipped: totalSkipped };
 }
 
 export async function GET(request: NextRequest) {
@@ -171,6 +179,7 @@ export async function GET(request: NextRequest) {
           total: connected.length,
           checked: result.checked,
           failed: result.failed,
+          skipped: result.skipped,
           server: server.name,
         };
       })
@@ -180,6 +189,7 @@ export async function GET(request: NextRequest) {
     let totalInstances = 0;
     let totalChecked = 0;
     let totalFailed = 0;
+    let totalSkipped = 0;
     const serverStats: Record<string, { total: number; checked: number; failed: number }> = {};
     const failedServerNames: string[] = [];
     const okServerNames: string[] = [];
@@ -189,11 +199,13 @@ export async function GET(request: NextRequest) {
         const v = result.value;
         queueEntries.push(...v.entries);
         totalInstances += v.total;
+        totalSkipped += v.skipped;
         totalChecked += v.checked;
         totalFailed += v.failed;
 
-        const failRate = v.total > 0 ? v.failed / v.total : 0;
-        if (failRate > 0.5 && v.failed > 10) {
+        const realFailures = v.failed;
+        const failRate = v.total > 0 ? realFailures / v.total : 0;
+        if (failRate > 0.5 && realFailures > 10) {
           failedServerNames.push(v.server);
           serverStats[v.server] = { total: v.total, checked: v.checked, failed: v.failed };
         } else {
@@ -305,6 +317,7 @@ export async function GET(request: NextRequest) {
       totalInstances,
       totalChecked,
       totalFailed,
+      totalSkipped,
       withQueue: queueEntries.length,
       alerting: alertEntries.length,
       ...(totalFailed > 0 ? { failedServers: serverStats } : {}),
