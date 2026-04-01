@@ -114,6 +114,7 @@ function entryKey(entry: QueueEntry) {
 export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps) {
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [lastCheck, setLastCheck] = useState<string | null>(null);
+  const [lastCronCheck, setLastCronCheck] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionStates, setActionStates] = useState<Record<string, EntryState>>({});
   const [nextRunCountdown, setNextRunCountdown] = useState("");
@@ -143,6 +144,7 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
         filtered.sort((a: QueueEntry, b: QueueEntry) => b.pending - a.pending);
         setEntries(filtered);
         setLastCheck(data.lastCheck || null);
+        setLastCronCheck(data.lastCheck || null);
       }
     } catch (error) {
       console.error("Erro ao buscar dados de fila:", error);
@@ -229,13 +231,13 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
   }, [isOpen, refreshEntries]);
 
   useEffect(() => {
-    if (!isOpen || !lastCheck) {
+    if (!isOpen || !lastCronCheck) {
       setNextRunCountdown("");
       return;
     }
     const CRON_INTERVAL_MS = 5 * 60 * 1000;
     const update = () => {
-      const lastTime = new Date(lastCheck).getTime();
+      const lastTime = new Date(lastCronCheck).getTime();
       const nextRun = lastTime + CRON_INTERVAL_MS;
       const diff = nextRun - Date.now();
       if (diff <= 0) {
@@ -249,7 +251,7 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
     update();
     const timer = setInterval(update, 1000);
     return () => clearInterval(timer);
-  }, [isOpen, lastCheck]);
+  }, [isOpen, lastCronCheck]);
 
   const handleReduceDelay = async (entry: QueueEntry) => {
     if (!entry.token) return;
