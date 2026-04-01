@@ -154,68 +154,44 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
   }, []);
 
   const refreshEntries = useCallback(async () => {
-    if (entries.length === 0) {
-      await fetchData();
-      return;
-    }
-
-    const toCheck = entries.filter((e) => e.token);
-    if (toCheck.length === 0) {
-      await fetchData();
-      return;
-    }
-
     setLoading(true);
     try {
       const res = await fetch("/api/queue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "batch-check",
-          instances: toCheck.map((e) => ({
-            server: e.server,
-            token: e.token,
-            number: e.number,
-          })),
-        }),
+        body: JSON.stringify({ action: "batch-check-all" }),
       });
 
       if (res.ok) {
         const data = await res.json();
-        const resultsMap = new Map<string, Record<string, unknown>>();
-        for (const r of data.results || []) {
-          resultsMap.set(`${r.server}-${r.number}`, r);
-        }
+        const allResults: QueueEntry[] = (data.results || [])
+          .filter((r: Record<string, unknown>) => (r.pending as number) >= 5)
+          .map((r: Record<string, unknown>) => ({
+            server: r.server as string,
+            instanceName: (r.name as string) || "",
+            number: r.number as string,
+            token: r.token as string,
+            pending: r.pending as number,
+            status: (r.status as string) || "unknown",
+            processingNow: (r.processingNow as boolean) || false,
+            sessionReady: (r.sessionReady as boolean) || false,
+            resetting: (r.resetting as boolean) || false,
+            checkedAt: new Date().toISOString(),
+          }));
 
-        setEntries((prev) => {
-          const updated = prev.map((entry) => {
-            const fresh = resultsMap.get(entryKey(entry));
-            if (fresh && !fresh.error) {
-              return {
-                ...entry,
-                pending: fresh.pending as number,
-                status: fresh.status as string,
-                processingNow: fresh.processingNow as boolean,
-                sessionReady: fresh.sessionReady as boolean,
-                resetting: fresh.resetting as boolean,
-                checkedAt: new Date().toISOString(),
-              };
-            }
-            return entry;
-          });
-
-          const filtered = updated.filter((e) => e.pending >= 5);
-          filtered.sort((a, b) => b.pending - a.pending);
-          return filtered;
-        });
+        allResults.sort((a, b) => b.pending - a.pending);
+        setEntries(allResults);
         setLastCheck(new Date().toISOString());
+      } else {
+        await fetchData();
       }
     } catch (error) {
       console.error("Erro ao atualizar filas:", error);
+      await fetchData();
     } finally {
       setLoading(false);
     }
-  }, [entries, fetchData]);
+  }, [fetchData]);
 
   useEffect(() => {
     if (isOpen) {

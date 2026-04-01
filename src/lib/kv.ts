@@ -298,6 +298,30 @@ export async function getQueueLastCheck(): Promise<string | null> {
   return await redis.get<string>(QUEUE_LAST_CHECK_KEY) || null;
 }
 
+// --- Connected Instances Cache ---
+
+const CONNECTED_INSTANCES_KEY = "uazapi:connected_instances";
+
+export interface CachedInstance {
+  server: string;
+  name: string;
+  owner: string;
+  token: string;
+}
+
+export async function saveConnectedInstances(instances: CachedInstance[]): Promise<void> {
+  if (!isRedisConfigured()) return;
+  const redis = getRedis();
+  await redis.set(CONNECTED_INSTANCES_KEY, instances);
+}
+
+export async function getConnectedInstances(): Promise<CachedInstance[]> {
+  if (!isRedisConfigured()) return [];
+  const redis = getRedis();
+  const data = await redis.get<CachedInstance[]>(CONNECTED_INSTANCES_KEY);
+  return data || [];
+}
+
 // --- Queue Server Fail Tracking ---
 
 const QUEUE_FAIL_PREFIX = "uazapi:queue_fail:";

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServers } from "@/lib/kv";
+import { getServers, getConnectedInstances } from "@/lib/kv";
 import { fetchAllInstances, getInstanceNumber } from "@/lib/uazapi";
 import { getUserRole } from "@/lib/api-auth";
 
@@ -28,6 +28,10 @@ export async function POST(request: NextRequest) {
 
     if (action === "batch-check") {
       return handleBatchCheck(body.instances || []);
+    }
+
+    if (action === "batch-check-all") {
+      return handleBatchCheckAll();
     }
 
     if (!server || !number) {
@@ -229,4 +233,64 @@ async function handleClearQueue(serverName: string, instanceToken: string) {
   }
 
   return NextResponse.json({ success: true, data });
+}
+
+const BATCH_CONCURRENCY = 20;
+const BATCH_TIMEOUT_MS = 8000;
+
+async function handleBatchCheckAll() {
+  const allInstances = await getConnectedInstances();
+
+  if (allInstances.length === 0) {
+    return NextResponse.json({ results: [] });
+  }
+
+  const results: Record<string, unknown>[] = [];
+
+  for (let i = 0; i < allInstances.length; i += BATCH_CONCURRENCY) {
+    const batch = allInstances.slice(i, i + BATCH_CONCURRENCY);
+    const batchResults = await Promise.allSettled(
+      batch.map(async (inst) => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), BATCH_TIMEOUT_MS);
+        try {
+          const res = await fetch(
+            `https://${inst.server}.uazapi.com/message/async`,
+            {
+              method: "GET",
+              headers: { Accept: "application/json", token: inst.token },
+              signal: controller.signal,
+            }
+          );
+          clearTimeout(timeout);
+          if (!res.ok) return null;
+          const data = await res.json();
+          const q = data.queue || data;
+          return {
+            number: inst.owner,
+            server: inst.server,
+            name: inst.name,
+            token: inst.token,
+            pending: q.pending ?? 0,
+            status: q.status ?? "unknown",
+            processingNow: q.processingNow ?? false,
+            sessionReady: q.sessionReady ?? false,
+            resetting: q.resetting ?? false,
+          };
+        } catch {
+          clearTimeout(timeout);
+          return null;
+        }
+      })
+    );
+
+    for (const r of batchResults) {
+      if (r.status === "fulfilled" && r.value && r.value.pending > 0) {
+        results.push(r.value);
+      }
+    }
+  }
+
+  results.sort((a, b) => (b.pending as number) - (a.pending as number));
+  return NextResponse.json({ results });
 }

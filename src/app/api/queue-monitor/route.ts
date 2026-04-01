@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServers, saveQueueData, getWebhookUrl, saveLog, incrementQueueFail, resetQueueFail } from "@/lib/kv";
-import { fetchAllInstances, isConnected } from "@/lib/uazapi";
+import { saveQueueData, getWebhookUrl, saveLog, incrementQueueFail, resetQueueFail, getConnectedInstances } from "@/lib/kv";
 import { sendPushToAll } from "@/lib/push";
 import { QueueEntry } from "@/lib/types";
 
@@ -146,41 +145,31 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const servers = await getServers();
+    const allConnected = await getConnectedInstances();
 
-    if (servers.length === 0) {
-      return NextResponse.json({ message: "Nenhum servidor cadastrado", checked: 0 });
+    if (allConnected.length === 0) {
+      return NextResponse.json({ message: "Nenhuma instância conectada no cache", checked: 0 });
     }
 
     const checkedAt = new Date().toISOString();
 
+    const byServer = new Map<string, InstanceItem[]>();
+    for (const inst of allConnected) {
+      const list = byServer.get(inst.server) || [];
+      list.push(inst);
+      byServer.set(inst.server, list);
+    }
+
     const serverQueueResults = await Promise.allSettled(
-      servers.map(async (server) => {
-        let instances;
-        try {
-          instances = await fetchAllInstances(server.name, server.token);
-        } catch {
-          return { entries: [] as QueueEntry[], total: 0, checked: 0, failed: 0, skipped: 0, server: server.name };
-        }
-
-        const connected = instances
-          .filter((inst) => isConnected(inst) && inst.token)
-          .map((inst) => ({
-            server: server.name,
-            name: inst.name || "",
-            owner: inst.owner || "",
-            token: inst.token!,
-          }));
-
-        const result = await checkBatchWithRetry(connected, CONCURRENCY_PER_SERVER, checkedAt);
-
+      Array.from(byServer.entries()).map(async ([serverName, instances]) => {
+        const result = await checkBatchWithRetry(instances, CONCURRENCY_PER_SERVER, checkedAt);
         return {
           entries: result.entries,
-          total: connected.length,
+          total: instances.length,
           checked: result.checked,
           failed: result.failed,
           skipped: result.skipped,
-          server: server.name,
+          server: serverName,
         };
       })
     );

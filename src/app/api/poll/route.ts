@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServers, getSnapshotsByNames, batchSaveSnapshots, getWebhookUrl, setLastPoll, saveLog, getCachedDc, saveDcCache, getDcLastFetch, setDcLastFetch, shouldFetchDcToday } from "@/lib/kv";
+import { getServers, getSnapshotsByNames, batchSaveSnapshots, getWebhookUrl, setLastPoll, saveLog, getCachedDc, saveDcCache, getDcLastFetch, setDcLastFetch, shouldFetchDcToday, saveConnectedInstances, CachedInstance } from "@/lib/kv";
 import { fetchServerStatus, fetchAllInstances, isConnected } from "@/lib/uazapi";
 import { sendPushToAll } from "@/lib/push";
 import { ServerSnapshot, WebhookAlert } from "@/lib/types";
@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
 
     const needDcFetch = shouldFetchDcToday(dcLastFetch);
     const newSnapshots: ServerSnapshot[] = [];
+    const allConnectedInstances: CachedInstance[] = [];
 
     const results = await Promise.all(
       servers.map(async (server) => {
@@ -114,8 +115,20 @@ export async function GET(request: NextRequest) {
           }
 
           const totalInstances = instances.length;
-          const connectedInstances = instances.filter(isConnected).length;
+          const connected = instances.filter(isConnected);
+          const connectedInstances = connected.length;
           const now = new Date().toISOString();
+
+          for (const inst of connected) {
+            if (inst.token) {
+              allConnectedInstances.push({
+                server: server.name,
+                name: inst.name || "",
+                owner: inst.owner || "",
+                token: inst.token,
+              });
+            }
+          }
 
           let dc = await getCachedDc(server.name);
           if (needDcFetch) {
@@ -215,6 +228,7 @@ export async function GET(request: NextRequest) {
     await Promise.all([
       batchSaveSnapshots(newSnapshots, snapshotsMap),
       setLastPoll(new Date().toISOString()),
+      saveConnectedInstances(allConnectedInstances),
     ]);
 
     return NextResponse.json({
