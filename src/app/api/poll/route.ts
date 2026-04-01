@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
               allConnectedInstances.push({
                 server: server.name,
                 name: inst.name || "",
-                owner: inst.owner || "",
+                owner: inst.owner || inst.name || "",
                 token: inst.token,
               });
             }

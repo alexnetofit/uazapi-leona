@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { saveQueueData, getWebhookUrl, saveLog, incrementQueueFail, resetQueueFail, getConnectedInstances } from "@/lib/kv";
+import { getServers, saveQueueData, getWebhookUrl, saveLog, incrementQueueFail, resetQueueFail, getConnectedInstances } from "@/lib/kv";
+import { fetchAllInstances, isConnected } from "@/lib/uazapi";
 import { sendPushToAll } from "@/lib/push";
 import { QueueEntry } from "@/lib/types";
 
@@ -145,10 +146,37 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const allConnected = await getConnectedInstances();
+    let allConnected = await getConnectedInstances();
 
     if (allConnected.length === 0) {
-      return NextResponse.json({ message: "Nenhuma instância conectada no cache", checked: 0 });
+      const servers = await getServers();
+      if (servers.length === 0) {
+        return NextResponse.json({ message: "Nenhum servidor cadastrado", checked: 0 });
+      }
+
+      const serverResults = await Promise.allSettled(
+        servers.map(async (server) => {
+          const instances = await fetchAllInstances(server.name, server.token);
+          return instances
+            .filter((inst) => isConnected(inst) && inst.token)
+            .map((inst) => ({
+              server: server.name,
+              name: inst.name || "",
+              owner: inst.owner || inst.name || "",
+              token: inst.token!,
+            }));
+        })
+      );
+
+      for (const r of serverResults) {
+        if (r.status === "fulfilled") {
+          allConnected.push(...r.value);
+        }
+      }
+
+      if (allConnected.length === 0) {
+        return NextResponse.json({ message: "Nenhuma instância conectada encontrada", checked: 0 });
+      }
     }
 
     const checkedAt = new Date().toISOString();
