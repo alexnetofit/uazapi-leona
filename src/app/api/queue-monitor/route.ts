@@ -10,59 +10,108 @@ const QUEUE_ALERT_THRESHOLD = 20;
 const FETCH_TIMEOUT_MS = 8000;
 const CONCURRENCY_PER_SERVER = 20;
 
-async function checkQueueBatch(
-  items: { server: string; name: string; owner: string; token: string }[],
+type InstanceItem = { server: string; name: string; owner: string; token: string };
+type CheckResult =
+  | { success: true; entry: QueueEntry | null }
+  | { success: false; item: InstanceItem };
+
+async function checkOneInstance(
+  item: InstanceItem,
   checkedAt: string
-): Promise<QueueEntry[]> {
-  const entries: QueueEntry[] = [];
-
-  const results = await Promise.allSettled(
-    items.map(async (item) => {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-      try {
-        const res = await fetch(
-          `https://${item.server}.uazapi.com/message/async`,
-          {
-            method: "GET",
-            headers: { Accept: "application/json", token: item.token },
-            signal: controller.signal,
-          }
-        );
-        clearTimeout(timeout);
-        if (!res.ok) return null;
-        const data = await res.json();
-        const q = data.queue || data;
-        const pending = q.pending ?? 0;
-        if (pending > 0) {
-          return {
-            server: item.server,
-            instanceName: item.name,
-            number: item.owner,
-            token: item.token,
-            pending,
-            status: q.status ?? "unknown",
-            processingNow: q.processingNow ?? false,
-            sessionReady: q.sessionReady ?? false,
-            resetting: q.resetting ?? false,
-            checkedAt,
-          } as QueueEntry;
-        }
-        return null;
-      } catch {
-        clearTimeout(timeout);
-        return null;
+): Promise<CheckResult> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(
+      `https://${item.server}.uazapi.com/message/async`,
+      {
+        method: "GET",
+        headers: { Accept: "application/json", token: item.token },
+        signal: controller.signal,
       }
-    })
-  );
+    );
+    clearTimeout(timeout);
+    if (!res.ok) return { success: false, item };
+    const data = await res.json();
+    const q = data.queue || data;
+    const pending = q.pending ?? 0;
+    if (pending > 0) {
+      return {
+        success: true,
+        entry: {
+          server: item.server,
+          instanceName: item.name,
+          number: item.owner,
+          token: item.token,
+          pending,
+          status: q.status ?? "unknown",
+          processingNow: q.processingNow ?? false,
+          sessionReady: q.sessionReady ?? false,
+          resetting: q.resetting ?? false,
+          checkedAt,
+        },
+      };
+    }
+    return { success: true, entry: null };
+  } catch {
+    clearTimeout(timeout);
+    return { success: false, item };
+  }
+}
 
-  for (const r of results) {
-    if (r.status === "fulfilled" && r.value) {
-      entries.push(r.value);
+async function checkBatchWithRetry(
+  items: InstanceItem[],
+  concurrency: number,
+  checkedAt: string
+): Promise<{ entries: QueueEntry[]; checked: number; failed: number }> {
+  const entries: QueueEntry[] = [];
+  let failed: InstanceItem[] = [];
+  let totalChecked = 0;
+
+  for (let i = 0; i < items.length; i += concurrency) {
+    const batch = items.slice(i, i + concurrency);
+    const results = await Promise.allSettled(
+      batch.map((item) => checkOneInstance(item, checkedAt))
+    );
+
+    for (const r of results) {
+      if (r.status === "fulfilled") {
+        if (r.value.success) {
+          totalChecked++;
+          if (r.value.entry) entries.push(r.value.entry);
+        } else {
+          failed.push(r.value.item);
+        }
+      } else {
+        failed.push(batch[results.indexOf(r)]);
+      }
     }
   }
 
-  return entries;
+  if (failed.length > 0) {
+    const retryItems = [...failed];
+    failed = [];
+
+    for (let i = 0; i < retryItems.length; i += concurrency) {
+      const batch = retryItems.slice(i, i + concurrency);
+      const results = await Promise.allSettled(
+        batch.map((item) => checkOneInstance(item, checkedAt))
+      );
+
+      for (const r of results) {
+        if (r.status === "fulfilled") {
+          if (r.value.success) {
+            totalChecked++;
+            if (r.value.entry) entries.push(r.value.entry);
+          } else {
+            failed.push(r.value.item);
+          }
+        }
+      }
+    }
+  }
+
+  return { entries, checked: totalChecked, failed: failed.length };
 }
 
 export async function GET(request: NextRequest) {
@@ -96,7 +145,6 @@ export async function GET(request: NextRequest) {
     }
 
     const checkedAt = new Date().toISOString();
-    let totalChecked = 0;
 
     const serverQueueResults = await Promise.allSettled(
       servers.map(async (server) => {
@@ -104,7 +152,7 @@ export async function GET(request: NextRequest) {
         try {
           instances = await fetchAllInstances(server.name, server.token);
         } catch {
-          return [] as QueueEntry[];
+          return { entries: [] as QueueEntry[], total: 0, checked: 0, failed: 0, server: server.name };
         }
 
         const connected = instances
@@ -116,23 +164,37 @@ export async function GET(request: NextRequest) {
             token: inst.token!,
           }));
 
-        totalChecked += connected.length;
+        const result = await checkBatchWithRetry(connected, CONCURRENCY_PER_SERVER, checkedAt);
 
-        const entries: QueueEntry[] = [];
-        for (let i = 0; i < connected.length; i += CONCURRENCY_PER_SERVER) {
-          const batch = connected.slice(i, i + CONCURRENCY_PER_SERVER);
-          const batchEntries = await checkQueueBatch(batch, checkedAt);
-          entries.push(...batchEntries);
-        }
-
-        return entries;
+        return {
+          entries: result.entries,
+          total: connected.length,
+          checked: result.checked,
+          failed: result.failed,
+          server: server.name,
+        };
       })
     );
 
     const queueEntries: QueueEntry[] = [];
+    let totalInstances = 0;
+    let totalChecked = 0;
+    let totalFailed = 0;
+    const serverStats: Record<string, { total: number; checked: number; failed: number }> = {};
+
     for (const result of serverQueueResults) {
       if (result.status === "fulfilled") {
-        queueEntries.push(...result.value);
+        queueEntries.push(...result.value.entries);
+        totalInstances += result.value.total;
+        totalChecked += result.value.checked;
+        totalFailed += result.value.failed;
+        if (result.value.failed > 0) {
+          serverStats[result.value.server] = {
+            total: result.value.total,
+            checked: result.value.checked,
+            failed: result.value.failed,
+          };
+        }
       }
     }
 
@@ -190,11 +252,18 @@ export async function GET(request: NextRequest) {
       ]);
     }
 
+    if (totalFailed > 0) {
+      console.error(`Queue monitor: ${totalFailed}/${totalInstances} instâncias falharam após retry`, serverStats);
+    }
+
     return NextResponse.json({
       message: "Queue monitor concluído",
+      totalInstances,
       totalChecked,
+      totalFailed,
       withQueue: queueEntries.length,
       alerting: alertEntries.length,
+      ...(totalFailed > 0 ? { failedServers: serverStats } : {}),
     });
   } catch (error) {
     console.error("Erro no queue monitor:", error);
