@@ -160,7 +160,7 @@ export async function GET(request: NextRequest) {
         try {
           instances = await fetchAllInstances(server.name, server.token);
         } catch {
-          return { entries: [] as QueueEntry[], total: 0, checked: 0, failed: 0, server: server.name };
+          return { entries: [] as QueueEntry[], total: 0, checked: 0, failed: 0, skipped: 0, server: server.name };
         }
 
         const connected = instances
