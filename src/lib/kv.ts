@@ -298,6 +298,31 @@ export async function getQueueLastCheck(): Promise<string | null> {
   return await redis.get<string>(QUEUE_LAST_CHECK_KEY) || null;
 }
 
+// --- Queue Server Fail Tracking ---
+
+const QUEUE_FAIL_PREFIX = "uazapi:queue_fail:";
+
+export async function getQueueFailCount(serverName: string): Promise<number> {
+  if (!isRedisConfigured()) return 0;
+  const redis = getRedis();
+  const count = await redis.get<number>(`${QUEUE_FAIL_PREFIX}${serverName}`);
+  return count || 0;
+}
+
+export async function incrementQueueFail(serverName: string): Promise<number> {
+  const redis = getRedis();
+  const key = `${QUEUE_FAIL_PREFIX}${serverName}`;
+  const current = await redis.get<number>(key) || 0;
+  const next = current + 1;
+  await redis.set(key, next);
+  return next;
+}
+
+export async function resetQueueFail(serverName: string): Promise<void> {
+  const redis = getRedis();
+  await redis.del(`${QUEUE_FAIL_PREFIX}${serverName}`);
+}
+
 // --- Push Subscriptions ---
 
 const PUSH_SUBS_KEY = "uazapi:push_subscriptions";

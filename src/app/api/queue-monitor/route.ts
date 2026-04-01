@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServers, saveQueueData, getWebhookUrl, saveLog } from "@/lib/kv";
+import { getServers, saveQueueData, getWebhookUrl, saveLog, incrementQueueFail, resetQueueFail } from "@/lib/kv";
 import { fetchAllInstances, isConnected } from "@/lib/uazapi";
 import { sendPushToAll } from "@/lib/push";
 import { QueueEntry } from "@/lib/types";
@@ -181,22 +181,66 @@ export async function GET(request: NextRequest) {
     let totalChecked = 0;
     let totalFailed = 0;
     const serverStats: Record<string, { total: number; checked: number; failed: number }> = {};
+    const failedServerNames: string[] = [];
+    const okServerNames: string[] = [];
 
     for (const result of serverQueueResults) {
       if (result.status === "fulfilled") {
-        queueEntries.push(...result.value.entries);
-        totalInstances += result.value.total;
-        totalChecked += result.value.checked;
-        totalFailed += result.value.failed;
-        if (result.value.failed > 0) {
-          serverStats[result.value.server] = {
-            total: result.value.total,
-            checked: result.value.checked,
-            failed: result.value.failed,
-          };
+        const v = result.value;
+        queueEntries.push(...v.entries);
+        totalInstances += v.total;
+        totalChecked += v.checked;
+        totalFailed += v.failed;
+
+        const failRate = v.total > 0 ? v.failed / v.total : 0;
+        if (failRate > 0.5 && v.failed > 10) {
+          failedServerNames.push(v.server);
+          serverStats[v.server] = { total: v.total, checked: v.checked, failed: v.failed };
+        } else {
+          okServerNames.push(v.server);
         }
       }
     }
+
+    const failTrackingPromises: Promise<void>[] = [];
+
+    for (const serverName of okServerNames) {
+      failTrackingPromises.push(resetQueueFail(serverName));
+    }
+
+    for (const serverName of failedServerNames) {
+      failTrackingPromises.push(
+        (async () => {
+          const consecutiveFails = await incrementQueueFail(serverName);
+          if (consecutiveFails >= 2) {
+            const stats = serverStats[serverName];
+            await sendPushToAll({
+              title: `Queue monitor: ${serverName} inacessível`,
+              body: `Falhou 2x seguidas na verificação de fila. ${stats.failed}/${stats.total} instâncias não verificadas.`,
+              tag: `queue-fail-${serverName}`,
+            });
+
+            await saveLog({
+              id: `${Date.now()}-queue-fail-${serverName}`,
+              type: "queue_alert",
+              server: serverName,
+              message: `Verificação de fila falhou 2x seguidas (${stats.failed}/${stats.total} instâncias)`,
+              timestamp: checkedAt,
+              details: {
+                consecutive_fails: consecutiveFails,
+                total: stats.total,
+                checked: stats.checked,
+                failed: stats.failed,
+              },
+            });
+
+            await resetQueueFail(serverName);
+          }
+        })()
+      );
+    }
+
+    await Promise.allSettled(failTrackingPromises);
 
     queueEntries.sort((a, b) => b.pending - a.pending);
     await saveQueueData(queueEntries);
