@@ -116,6 +116,7 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
   const [lastCheck, setLastCheck] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [actionStates, setActionStates] = useState<Record<string, EntryState>>({});
+  const [nextRunCountdown, setNextRunCountdown] = useState("");
 
   const getState = (entry: QueueEntry): EntryState => {
     return actionStates[entryKey(entry)] || {
@@ -226,6 +227,29 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
     const interval = setInterval(refreshEntries, 60000);
     return () => clearInterval(interval);
   }, [isOpen, refreshEntries]);
+
+  useEffect(() => {
+    if (!isOpen || !lastCheck) {
+      setNextRunCountdown("");
+      return;
+    }
+    const CRON_INTERVAL_MS = 5 * 60 * 1000;
+    const update = () => {
+      const lastTime = new Date(lastCheck).getTime();
+      const nextRun = lastTime + CRON_INTERVAL_MS;
+      const diff = nextRun - Date.now();
+      if (diff <= 0) {
+        setNextRunCountdown("em breve");
+      } else {
+        const mins = Math.floor(diff / 60000);
+        const secs = Math.floor((diff % 60000) / 1000);
+        setNextRunCountdown(`${mins}:${secs.toString().padStart(2, "0")}`);
+      }
+    };
+    update();
+    const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  }, [isOpen, lastCheck]);
 
   const handleReduceDelay = async (entry: QueueEntry) => {
     if (!entry.token) return;
@@ -354,9 +378,19 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
           </div>
           <div className="flex items-center gap-2">
             {lastCheck && (
-              <span className="text-[10px] text-zinc-500" title={formatDate(lastCheck)}>
-                {formatRelative(lastCheck)}
-              </span>
+              <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+                <span title={formatDate(lastCheck)}>
+                  {formatRelative(lastCheck)}
+                </span>
+                {nextRunCountdown && (
+                  <>
+                    <span className="text-zinc-700">|</span>
+                    <span className="text-zinc-400" title="Próxima execução automática">
+                      {nextRunCountdown}
+                    </span>
+                  </>
+                )}
+              </div>
             )}
             <button
               onClick={refreshEntries}
