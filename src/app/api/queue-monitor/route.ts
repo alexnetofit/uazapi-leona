@@ -7,7 +7,63 @@ import { QueueEntry } from "@/lib/types";
 export const maxDuration = 60;
 
 const QUEUE_ALERT_THRESHOLD = 20;
-const FETCH_TIMEOUT_MS = 4000;
+const FETCH_TIMEOUT_MS = 8000;
+const CONCURRENCY_PER_SERVER = 20;
+
+async function checkQueueBatch(
+  items: { server: string; name: string; owner: string; token: string }[],
+  checkedAt: string
+): Promise<QueueEntry[]> {
+  const entries: QueueEntry[] = [];
+
+  const results = await Promise.allSettled(
+    items.map(async (item) => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      try {
+        const res = await fetch(
+          `https://${item.server}.uazapi.com/message/async`,
+          {
+            method: "GET",
+            headers: { Accept: "application/json", token: item.token },
+            signal: controller.signal,
+          }
+        );
+        clearTimeout(timeout);
+        if (!res.ok) return null;
+        const data = await res.json();
+        const q = data.queue || data;
+        const pending = q.pending ?? 0;
+        if (pending > 0) {
+          return {
+            server: item.server,
+            instanceName: item.name,
+            number: item.owner,
+            token: item.token,
+            pending,
+            status: q.status ?? "unknown",
+            processingNow: q.processingNow ?? false,
+            sessionReady: q.sessionReady ?? false,
+            resetting: q.resetting ?? false,
+            checkedAt,
+          } as QueueEntry;
+        }
+        return null;
+      } catch {
+        clearTimeout(timeout);
+        return null;
+      }
+    })
+  );
+
+  for (const r of results) {
+    if (r.status === "fulfilled" && r.value) {
+      entries.push(r.value);
+    }
+  }
+
+  return entries;
+}
 
 export async function GET(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
@@ -39,12 +95,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: "Nenhum servidor cadastrado", checked: 0 });
     }
 
-    type ConnectedInstance = { server: string; name: string; owner: string; token: string };
+    const checkedAt = new Date().toISOString();
+    let totalChecked = 0;
 
-    const serverResults = await Promise.allSettled(
+    const serverQueueResults = await Promise.allSettled(
       servers.map(async (server) => {
-        const instances = await fetchAllInstances(server.name, server.token);
-        return instances
+        let instances;
+        try {
+          instances = await fetchAllInstances(server.name, server.token);
+        } catch {
+          return [] as QueueEntry[];
+        }
+
+        const connected = instances
           .filter((inst) => isConnected(inst) && inst.token)
           .map((inst) => ({
             server: server.name,
@@ -52,57 +115,26 @@ export async function GET(request: NextRequest) {
             owner: inst.owner || "",
             token: inst.token!,
           }));
+
+        totalChecked += connected.length;
+
+        const entries: QueueEntry[] = [];
+        for (let i = 0; i < connected.length; i += CONCURRENCY_PER_SERVER) {
+          const batch = connected.slice(i, i + CONCURRENCY_PER_SERVER);
+          const batchEntries = await checkQueueBatch(batch, checkedAt);
+          entries.push(...batchEntries);
+        }
+
+        return entries;
       })
     );
 
-    const allConnected: ConnectedInstance[] = [];
-    for (const result of serverResults) {
+    const queueEntries: QueueEntry[] = [];
+    for (const result of serverQueueResults) {
       if (result.status === "fulfilled") {
-        allConnected.push(...result.value);
+        queueEntries.push(...result.value);
       }
     }
-
-    const checkedAt = new Date().toISOString();
-    const queueEntries: QueueEntry[] = [];
-
-    const queueResults = await Promise.allSettled(
-      allConnected.map(async (item) => {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-        try {
-          const res = await fetch(
-            `https://${item.server}.uazapi.com/message/async`,
-            {
-              method: "GET",
-              headers: { Accept: "application/json", token: item.token },
-              signal: controller.signal,
-            }
-          );
-          clearTimeout(timeout);
-          if (!res.ok) return;
-          const data = await res.json();
-          const q = data.queue || data;
-          const pending = q.pending ?? 0;
-          if (pending > 0) {
-            queueEntries.push({
-              server: item.server,
-              instanceName: item.name,
-              number: item.owner,
-              token: item.token,
-              pending,
-              status: q.status ?? "unknown",
-              processingNow: q.processingNow ?? false,
-              sessionReady: q.sessionReady ?? false,
-              resetting: q.resetting ?? false,
-              checkedAt,
-            });
-          }
-        } catch {
-          clearTimeout(timeout);
-        }
-      })
-    );
-    void queueResults;
 
     queueEntries.sort((a, b) => b.pending - a.pending);
     await saveQueueData(queueEntries);
@@ -160,7 +192,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       message: "Queue monitor concluído",
-      totalChecked: allConnected.length,
+      totalChecked,
       withQueue: queueEntries.length,
       alerting: alertEntries.length,
     });
