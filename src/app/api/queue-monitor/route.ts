@@ -6,8 +6,10 @@ import { QueueEntry } from "@/lib/types";
 
 export const maxDuration = 60;
 
-const QUEUE_ALERT_THRESHOLD = 20;
+const QUEUE_ALERT_THRESHOLD = 40;
+const AUTO_RESET_THRESHOLD = 20;
 const FETCH_TIMEOUT_MS = 8000;
+const RESET_TIMEOUT_MS = 6000;
 const CONCURRENCY_PER_SERVER = 50;
 
 type InstanceItem = { server: string; name: string; owner: string; token: string };
@@ -273,6 +275,46 @@ export async function GET(request: NextRequest) {
 
     queueEntries.sort((a, b) => b.pending - a.pending);
     await saveQueueData(queueEntries);
+
+    const toReset = queueEntries.filter((e) => e.pending >= AUTO_RESET_THRESHOLD && e.token);
+    let resetCount = 0;
+    let resetFailed = 0;
+
+    if (toReset.length > 0) {
+      const resetResults = await Promise.allSettled(
+        toReset.map(async (entry) => {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), RESET_TIMEOUT_MS);
+          try {
+            const res = await fetch(
+              `https://${entry.server}.uazapi.com/instance/reset`,
+              {
+                method: "POST",
+                headers: { Accept: "application/json", token: entry.token },
+                signal: controller.signal,
+              }
+            );
+            clearTimeout(timeout);
+            return res.ok;
+          } catch {
+            clearTimeout(timeout);
+            return false;
+          }
+        })
+      );
+
+      for (const r of resetResults) {
+        if (r.status === "fulfilled" && r.value) {
+          resetCount++;
+        } else {
+          resetFailed++;
+        }
+      }
+
+      if (resetCount > 0 || resetFailed > 0) {
+        console.log(`Auto-reset: ${resetCount} reiniciadas, ${resetFailed} falharam (de ${toReset.length} com fila >= ${AUTO_RESET_THRESHOLD})`);
+      }
+    }
 
     const alertEntries = queueEntries.filter((e) => e.pending > QUEUE_ALERT_THRESHOLD);
 
