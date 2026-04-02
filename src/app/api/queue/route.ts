@@ -350,6 +350,15 @@ async function handleBatchCheckAll() {
 }
 
 async function handleRestartServer(serverName: string) {
+  const servers = await getServers();
+  const server = servers.find((s) => s.name === serverName);
+  if (!server) {
+    return NextResponse.json(
+      { error: "Servidor não encontrado" },
+      { status: 404 }
+    );
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   try {
@@ -357,7 +366,7 @@ async function handleRestartServer(serverName: string) {
       `https://${serverName}.uazapi.com/admin/restart`,
       {
         method: "POST",
-        headers: { Accept: "application/json" },
+        headers: { Accept: "application/json", AdminToken: server.token },
         signal: controller.signal,
       }
     );
