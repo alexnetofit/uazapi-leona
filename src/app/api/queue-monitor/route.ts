@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServers, saveQueueData, getWebhookUrl, saveLog, incrementQueueFail, resetQueueFail, getConnectedInstances } from "@/lib/kv";
+import { getServers, saveQueueData, getQueueData, getWebhookUrl, saveLog, incrementQueueFail, resetQueueFail, getConnectedInstances } from "@/lib/kv";
 import { fetchAllInstances, isConnected } from "@/lib/uazapi";
 import { sendPushToAll } from "@/lib/push";
 import { QueueEntry } from "@/lib/types";
@@ -67,7 +67,7 @@ async function checkBatchWithRetry(
   items: InstanceItem[],
   concurrency: number,
   checkedAt: string
-): Promise<{ entries: QueueEntry[]; checked: number; failed: number; skipped: number }> {
+): Promise<{ entries: QueueEntry[]; checked: number; failed: number; skipped: number; failedItems: InstanceItem[] }> {
   const entries: QueueEntry[] = [];
   let failed: InstanceItem[] = [];
   let totalChecked = 0;
@@ -121,7 +121,7 @@ async function checkBatchWithRetry(
     }
   }
 
-  return { entries, checked: totalChecked, failed: failed.length, skipped: totalSkipped };
+  return { entries, checked: totalChecked, failed: failed.length, skipped: totalSkipped, failedItems: failed };
 }
 
 export async function GET(request: NextRequest) {
@@ -190,6 +190,12 @@ export async function GET(request: NextRequest) {
       byServer.set(inst.server, list);
     }
 
+    const previousQueueData = await getQueueData();
+    const previousMap = new Map<string, QueueEntry>();
+    for (const entry of previousQueueData) {
+      previousMap.set(`${entry.server}-${entry.number}`, entry);
+    }
+
     const serverQueueResults = await Promise.allSettled(
       Array.from(byServer.entries()).map(async ([serverName, instances]) => {
         const result = await checkBatchWithRetry(instances, CONCURRENCY_PER_SERVER, checkedAt);
@@ -199,12 +205,14 @@ export async function GET(request: NextRequest) {
           checked: result.checked,
           failed: result.failed,
           skipped: result.skipped,
+          failedItems: result.failedItems,
           server: serverName,
         };
       })
     );
 
     const queueEntries: QueueEntry[] = [];
+    const addedKeys = new Set<string>();
     let totalInstances = 0;
     let totalChecked = 0;
     let totalFailed = 0;
@@ -216,7 +224,23 @@ export async function GET(request: NextRequest) {
     for (const result of serverQueueResults) {
       if (result.status === "fulfilled") {
         const v = result.value;
-        queueEntries.push(...v.entries);
+        for (const entry of v.entries) {
+          const key = `${entry.server}-${entry.number}`;
+          queueEntries.push(entry);
+          addedKeys.add(key);
+        }
+
+        for (const failedItem of v.failedItems) {
+          const key = `${failedItem.server}-${failedItem.owner}`;
+          if (!addedKeys.has(key)) {
+            const prev = previousMap.get(key);
+            if (prev && prev.pending > 0) {
+              queueEntries.push({ ...prev, checkedAt: prev.checkedAt + " (cache)" });
+              addedKeys.add(key);
+            }
+          }
+        }
+
         totalInstances += v.total;
         totalSkipped += v.skipped;
         totalChecked += v.checked;
