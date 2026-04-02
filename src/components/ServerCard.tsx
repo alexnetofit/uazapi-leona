@@ -52,6 +52,7 @@ export default function ServerCard({
   const [restarting, setRestarting] = useState(false);
   const [restartResult, setRestartResult] = useState("");
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
+  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
 
   const handleRestartServer = async () => {
     setShowRestartConfirm(false);
@@ -142,12 +143,9 @@ export default function ServerCard({
           )}
           {onRemove && (
             <button
-              onClick={() => {
-                if (confirm(`Remover servidor "${serverName}"?`)) {
-                  onRemove(serverName);
-                }
-              }}
-              className="text-zinc-500 hover:text-red-400 transition-colors"
+              onClick={() => setShowRemoveConfirm(true)}
+              disabled={showRemoveConfirm}
+              className="text-zinc-500 hover:text-red-400 transition-colors disabled:opacity-50"
               title="Remover servidor"
             >
               <svg
@@ -187,6 +185,31 @@ export default function ServerCard({
             </button>
             <button
               onClick={() => setShowRestartConfirm(false)}
+              className="px-3 py-1.5 rounded-lg bg-zinc-700 text-zinc-300 text-[11px] font-medium hover:bg-zinc-600 transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showRemoveConfirm && (
+        <div className="mb-3 bg-red-950/30 border border-red-800/50 rounded-xl p-3">
+          <p className="text-xs text-red-300 font-medium mb-1">
+            Remover {serverName}?
+          </p>
+          <p className="text-[10px] text-red-400/70 mb-3">
+            O servidor será removido do painel. Essa ação não afeta o servidor em si.
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setShowRemoveConfirm(false); onRemove?.(serverName); }}
+              className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-[11px] font-medium hover:bg-red-700 transition-colors"
+            >
+              Remover
+            </button>
+            <button
+              onClick={() => setShowRemoveConfirm(false)}
               className="px-3 py-1.5 rounded-lg bg-zinc-700 text-zinc-300 text-[11px] font-medium hover:bg-zinc-600 transition-colors"
             >
               Cancelar
