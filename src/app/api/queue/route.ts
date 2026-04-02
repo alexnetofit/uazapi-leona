@@ -34,6 +34,23 @@ export async function POST(request: NextRequest) {
       return handleBatchCheckAll();
     }
 
+    if (action === "restart-server") {
+      if (!server) {
+        return NextResponse.json(
+          { error: "Servidor é obrigatório" },
+          { status: 400 }
+        );
+      }
+      const role = getUserRole(request);
+      if (role !== "admin") {
+        return NextResponse.json(
+          { error: "Acesso restrito ao administrador" },
+          { status: 403 }
+        );
+      }
+      return handleRestartServer(server);
+    }
+
     if (!server || !number) {
       return NextResponse.json(
         { error: "Servidor e número são obrigatórios" },
@@ -330,6 +347,38 @@ async function handleBatchCheckAll() {
 
   checked.sort((a, b) => (b.pending as number) - (a.pending as number));
   return NextResponse.json({ results: checked });
+}
+
+async function handleRestartServer(serverName: string) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(
+      `https://${serverName}.uazapi.com/admin/restart`,
+      {
+        method: "POST",
+        headers: { Accept: "application/json" },
+        signal: controller.signal,
+      }
+    );
+    clearTimeout(timeout);
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      return NextResponse.json(
+        { error: "Erro ao reiniciar servidor", details: data },
+        { status: res.status }
+      );
+    }
+
+    return NextResponse.json({ success: true, data });
+  } catch {
+    clearTimeout(timeout);
+    return NextResponse.json(
+      { error: "Timeout ao reiniciar servidor" },
+      { status: 504 }
+    );
+  }
 }
 
 async function handleWebhookErrors(serverName: string, instanceToken: string) {

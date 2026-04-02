@@ -424,6 +424,7 @@ export default function Home() {
                       error={server.error}
                       dc={server.dc}
                       isRefreshing={refreshingServers.has(server.serverName)}
+                      isAdmin={isAdmin}
                       onRemove={isAdmin ? handleRemoveServer : undefined}
                     />
                   ))}

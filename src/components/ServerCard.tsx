@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { PreviousCount } from "@/lib/types";
 
 interface ServerCardProps {
@@ -12,6 +13,7 @@ interface ServerCardProps {
   error?: boolean;
   dc?: string;
   isRefreshing?: boolean;
+  isAdmin?: boolean;
   onRemove?: (name: string) => void;
 }
 
@@ -44,8 +46,32 @@ export default function ServerCard({
   error,
   dc,
   isRefreshing,
+  isAdmin,
   onRemove,
 }: ServerCardProps) {
+  const [restarting, setRestarting] = useState(false);
+  const [restartResult, setRestartResult] = useState("");
+
+  const handleRestartServer = async () => {
+    if (!confirm(`Reiniciar o servidor "${serverName}"?\n\nIsso reinicia toda a aplicação e força a reconexão de todas as instâncias.`)) return;
+    setRestarting(true);
+    setRestartResult("");
+    try {
+      const res = await fetch("/api/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "restart-server", server: serverName }),
+      });
+      const data = await res.json();
+      setRestartResult(res.ok ? "Reinício agendado!" : (data.error || "Erro"));
+    } catch {
+      setRestartResult("Erro ao conectar");
+    } finally {
+      setRestarting(false);
+      setTimeout(() => setRestartResult(""), 5000);
+    }
+  };
+
   const formatDate = (iso: string) => {
     if (!iso) return "";
     const d = new Date(iso);
@@ -90,33 +116,57 @@ export default function ServerCard({
             </span>
           )}
         </div>
-        {onRemove && (
-          <button
-            onClick={() => {
-              if (confirm(`Remover servidor "${serverName}"?`)) {
-                onRemove(serverName);
-              }
-            }}
-            className="text-zinc-500 hover:text-red-400 transition-colors"
-            title="Remover servidor"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+        <div className="flex items-center gap-1.5">
+          {isAdmin && (
+            <button
+              onClick={handleRestartServer}
+              disabled={restarting}
+              className="text-zinc-500 hover:text-amber-400 transition-colors disabled:opacity-50"
+              title="Reiniciar servidor"
             >
-              <path d="M3 6h18" />
-              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-            </svg>
-          </button>
-        )}
+              {restarting ? (
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
+                  <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 2v6h-6" />
+                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                  <path d="M3 22v-6h6" />
+                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+                </svg>
+              )}
+            </button>
+          )}
+          {onRemove && (
+            <button
+              onClick={() => {
+                if (confirm(`Remover servidor "${serverName}"?`)) {
+                  onRemove(serverName);
+                }
+              }}
+              className="text-zinc-500 hover:text-red-400 transition-colors"
+              title="Remover servidor"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 6h18" />
+                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {error ? (
@@ -190,9 +240,16 @@ export default function ServerCard({
             />
           </div>
 
-          <p className="text-[10px] sm:text-xs text-zinc-500 text-right">
-            {formatDate(timestamp)}
-          </p>
+          <div className="flex items-center justify-between">
+            {restartResult && (
+              <span className={`text-[10px] font-medium ${restartResult.includes("agendado") ? "text-green-400" : "text-red-400"}`}>
+                {restartResult}
+              </span>
+            )}
+            <p className="text-[10px] sm:text-xs text-zinc-500 text-right ml-auto">
+              {formatDate(timestamp)}
+            </p>
+          </div>
         </>
       )}
     </div>
