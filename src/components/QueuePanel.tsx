@@ -33,6 +33,8 @@ interface EntryState {
   resetResult: string;
   clearLoading: boolean;
   clearResult: string;
+  syncLoading: boolean;
+  syncResult: string;
   webhookLoading: boolean;
   webhookErrors: WebhookError[] | null;
   webhookError: string;
@@ -138,6 +140,7 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
       delayLoading: false, delayResult: "",
       resetLoading: false, resetResult: "",
       clearLoading: false, clearResult: "",
+      syncLoading: false, syncResult: "",
       webhookLoading: false, webhookErrors: null, webhookError: "",
     };
   };
@@ -289,6 +292,30 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
       });
     } catch {
       updateState(entry, { resetLoading: false, resetResult: "Erro ao conectar" });
+    }
+  };
+
+  const handleTestSync = async (entry: QueueEntry) => {
+    if (!entry.token) return;
+    updateState(entry, { syncLoading: true, syncResult: "" });
+    try {
+      const res = await fetch("/api/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "test-sync",
+          server: entry.server,
+          number: entry.number,
+          instanceToken: entry.token,
+        }),
+      });
+      const data = await res.json();
+      updateState(entry, {
+        syncLoading: false,
+        syncResult: res.ok ? "Enviado!" : (data.error || "Erro"),
+      });
+    } catch {
+      updateState(entry, { syncLoading: false, syncResult: "Erro ao conectar" });
     }
   };
 
@@ -572,10 +599,17 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
                                 >
                                   {state.webhookLoading ? "Carregando..." : state.webhookErrors !== null ? "Fechar Erros" : "Erros Webhook"}
                                 </button>
+                                <button
+                                  onClick={() => handleTestSync(entry)}
+                                  disabled={state.syncLoading}
+                                  className="px-2.5 py-1 rounded-md bg-blue-700 text-white text-[10px] font-medium hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                                >
+                                  {state.syncLoading ? "Enviando..." : "Teste Sync"}
+                                </button>
                               </div>
                             )}
 
-                            {(state.delayResult || state.resetResult || state.clearResult || state.webhookError) && (
+                            {(state.delayResult || state.resetResult || state.clearResult || state.syncResult || state.webhookError) && (
                               <div className="mt-1.5 flex flex-wrap gap-2">
                                 {state.delayResult && (
                                   <span className={`text-[10px] ${state.delayResult.includes("reduzido") ? "text-green-400" : "text-red-400"}`}>
@@ -590,6 +624,11 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
                                 {state.clearResult && (
                                   <span className={`text-[10px] ${state.clearResult.includes("apagada") ? "text-green-400" : "text-red-400"}`}>
                                     {state.clearResult}
+                                  </span>
+                                )}
+                                {state.syncResult && (
+                                  <span className={`text-[10px] ${state.syncResult.includes("Enviado") ? "text-green-400" : "text-red-400"}`}>
+                                    {state.syncResult}
                                   </span>
                                 )}
                                 {state.webhookError && (

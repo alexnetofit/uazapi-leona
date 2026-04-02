@@ -24,6 +24,8 @@ interface ResultEntry {
   resetResult: string;
   clearLoading: boolean;
   clearResult: string;
+  syncLoading: boolean;
+  syncResult: string;
 }
 
 interface SearchBarProps {
@@ -56,6 +58,8 @@ export default function SearchBar({ userRole }: SearchBarProps) {
     resetResult: "",
     clearLoading: false,
     clearResult: "",
+    syncLoading: false,
+    syncResult: "",
   });
 
   const handleSearch = async () => {
@@ -234,6 +238,37 @@ export default function SearchBar({ userRole }: SearchBarProps) {
     }
   };
 
+  const handleTestSync = async (index: number) => {
+    const entry = results[index];
+    const number = entry.instance.owner || entry.instance.name || "";
+
+    updateResult(index, { syncLoading: true, syncResult: "" });
+
+    try {
+      const res = await fetch("/api/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "test-sync",
+          server: entry.server,
+          number,
+          instanceToken: entry.instance.token || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        updateResult(index, { syncResult: "Enviado com sucesso!" });
+      } else {
+        updateResult(index, { syncResult: data.error || "Erro ao enviar" });
+      }
+    } catch {
+      updateResult(index, { syncResult: "Erro ao conectar" });
+    } finally {
+      updateResult(index, { syncLoading: false });
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       handleSearch();
@@ -363,6 +398,13 @@ export default function SearchBar({ userRole }: SearchBarProps) {
                     >
                       {entry.resetLoading ? "Reiniciando..." : "Reiniciar Instância"}
                     </button>
+                    <button
+                      onClick={() => handleTestSync(index)}
+                      disabled={entry.syncLoading}
+                      className="px-3 py-1.5 rounded-lg bg-blue-700 text-white text-xs font-medium hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                    >
+                      {entry.syncLoading ? "Enviando..." : "Teste Sync"}
+                    </button>
                     {isAdmin && (
                       <button
                         onClick={() => handleClearQueue(index)}
@@ -387,6 +429,11 @@ export default function SearchBar({ userRole }: SearchBarProps) {
                     {entry.clearResult && (
                       <span className={`text-xs ${entry.clearResult.includes("sucesso") ? "text-green-400" : "text-red-400"}`}>
                         {entry.clearResult}
+                      </span>
+                    )}
+                    {entry.syncResult && (
+                      <span className={`text-xs ${entry.syncResult.includes("sucesso") ? "text-green-400" : "text-red-400"}`}>
+                        {entry.syncResult}
                       </span>
                     )}
                   </div>

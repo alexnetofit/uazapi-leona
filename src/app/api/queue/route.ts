@@ -87,6 +87,10 @@ export async function POST(request: NextRequest) {
       return handleResetInstance(server, token);
     }
 
+    if (action === "test-sync") {
+      return handleTestSync(server, token);
+    }
+
     if (action === "clear-queue") {
       const role = getUserRole(request);
       if (role !== "admin") {
@@ -230,6 +234,46 @@ async function handleResetInstance(serverName: string, instanceToken: string) {
   }
 
   return NextResponse.json({ success: true, data });
+}
+
+async function handleTestSync(serverName: string, instanceToken: string) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(
+      `https://${serverName}.uazapi.com/send/text`,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          token: instanceToken,
+        },
+        body: JSON.stringify({
+          number: "5512991426510",
+          text: "Teste Sync",
+        }),
+        signal: controller.signal,
+      }
+    );
+    clearTimeout(timeout);
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      return NextResponse.json(
+        { error: "Erro ao enviar teste sync", details: data },
+        { status: res.status }
+      );
+    }
+
+    return NextResponse.json({ success: true, data });
+  } catch {
+    clearTimeout(timeout);
+    return NextResponse.json(
+      { error: "Timeout ao enviar teste sync" },
+      { status: 504 }
+    );
+  }
 }
 
 async function handleClearQueue(serverName: string, instanceToken: string) {
