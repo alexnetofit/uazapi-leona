@@ -191,7 +191,7 @@ async function handleReduceDelay(serverName: string, instanceToken: string) {
       },
       body: JSON.stringify({
         msg_delay_min: 0,
-        msg_delay_max: 1,
+        msg_delay_max: 0,
       }),
     }
   );
