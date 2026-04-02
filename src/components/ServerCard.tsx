@@ -51,9 +51,10 @@ export default function ServerCard({
 }: ServerCardProps) {
   const [restarting, setRestarting] = useState(false);
   const [restartResult, setRestartResult] = useState("");
+  const [showRestartConfirm, setShowRestartConfirm] = useState(false);
 
   const handleRestartServer = async () => {
-    if (!confirm(`Reiniciar o servidor "${serverName}"?\n\nIsso reinicia toda a aplicação e força a reconexão de todas as instâncias.`)) return;
+    setShowRestartConfirm(false);
     setRestarting(true);
     setRestartResult("");
     try {
@@ -119,8 +120,8 @@ export default function ServerCard({
         <div className="flex items-center gap-1.5">
           {isAdmin && (
             <button
-              onClick={handleRestartServer}
-              disabled={restarting}
+              onClick={() => setShowRestartConfirm(true)}
+              disabled={restarting || showRestartConfirm}
               className="text-zinc-500 hover:text-amber-400 transition-colors disabled:opacity-50"
               title="Reiniciar servidor"
             >
@@ -168,6 +169,31 @@ export default function ServerCard({
           )}
         </div>
       </div>
+
+      {showRestartConfirm && (
+        <div className="mb-3 bg-amber-950/30 border border-amber-800/50 rounded-xl p-3">
+          <p className="text-xs text-amber-300 font-medium mb-1">
+            Reiniciar {serverName}?
+          </p>
+          <p className="text-[10px] text-amber-400/70 mb-3">
+            Isso reinicia toda a aplicação e força a reconexão de todas as instâncias.
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRestartServer}
+              className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-[11px] font-medium hover:bg-amber-700 transition-colors"
+            >
+              Confirmar
+            </button>
+            <button
+              onClick={() => setShowRestartConfirm(false)}
+              className="px-3 py-1.5 rounded-lg bg-zinc-700 text-zinc-300 text-[11px] font-medium hover:bg-zinc-600 transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       {error ? (
         /* Estado de erro */
