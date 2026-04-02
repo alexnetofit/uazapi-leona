@@ -58,6 +58,10 @@ export async function POST(request: NextRequest) {
       return handleCheckQueue(server, token);
     }
 
+    if (action === "webhook-errors") {
+      return handleWebhookErrors(server, token);
+    }
+
     if (action === "reduce-delay") {
       return handleReduceDelay(server, token);
     }
@@ -326,4 +330,48 @@ async function handleBatchCheckAll() {
 
   checked.sort((a, b) => (b.pending as number) - (a.pending as number));
   return NextResponse.json({ results: checked });
+}
+
+async function handleWebhookErrors(serverName: string, instanceToken: string) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(
+      `https://${serverName}.uazapi.com/webhook/errors`,
+      {
+        method: "GET",
+        headers: { Accept: "application/json", token: instanceToken },
+        signal: controller.signal,
+      }
+    );
+    clearTimeout(timeout);
+    const data = await res.json().catch(() => []);
+
+    if (!res.ok) {
+      return NextResponse.json(
+        { error: "Erro ao buscar erros de webhook", details: data },
+        { status: res.status }
+      );
+    }
+
+    const errors = Array.isArray(data) ? data : [];
+    const formatted = errors.map((e: Record<string, unknown>) => ({
+      created: e.created || "",
+      url: e.url || "",
+      type: e.type || "",
+      event: e.event || "",
+      messageType: e.message_type || "",
+      statusCode: e.status_code || 0,
+      attempts: e.attempts || 0,
+      error: e.error || "",
+    }));
+
+    return NextResponse.json({ success: true, errors: formatted });
+  } catch {
+    clearTimeout(timeout);
+    return NextResponse.json(
+      { error: "Timeout ao buscar erros de webhook" },
+      { status: 504 }
+    );
+  }
 }

@@ -15,6 +15,17 @@ interface QueueEntry {
   checkedAt: string;
 }
 
+interface WebhookError {
+  created: string;
+  url: string;
+  type: string;
+  event: string;
+  messageType: string;
+  statusCode: number;
+  attempts: number;
+  error: string;
+}
+
 interface EntryState {
   delayLoading: boolean;
   delayResult: string;
@@ -22,6 +33,9 @@ interface EntryState {
   resetResult: string;
   clearLoading: boolean;
   clearResult: string;
+  webhookLoading: boolean;
+  webhookErrors: WebhookError[] | null;
+  webhookError: string;
 }
 
 interface QueuePanelProps {
@@ -124,6 +138,7 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
       delayLoading: false, delayResult: "",
       resetLoading: false, resetResult: "",
       clearLoading: false, clearResult: "",
+      webhookLoading: false, webhookErrors: null, webhookError: "",
     };
   };
 
@@ -277,6 +292,36 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
     }
   };
 
+  const handleWebhookErrors = async (entry: QueueEntry) => {
+    if (!entry.token) return;
+    const state = getState(entry);
+    if (state.webhookErrors !== null) {
+      updateState(entry, { webhookErrors: null, webhookError: "" });
+      return;
+    }
+    updateState(entry, { webhookLoading: true, webhookError: "" });
+    try {
+      const res = await fetch("/api/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "webhook-errors",
+          server: entry.server,
+          number: entry.number,
+          instanceToken: entry.token,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.errors) {
+        updateState(entry, { webhookLoading: false, webhookErrors: data.errors });
+      } else {
+        updateState(entry, { webhookLoading: false, webhookError: data.error || "Erro" });
+      }
+    } catch {
+      updateState(entry, { webhookLoading: false, webhookError: "Erro ao conectar" });
+    }
+  };
+
   const handleClearQueue = async (entry: QueueEntry) => {
     if (!entry.token) return;
     if (!confirm("Tem certeza? Isso vai cancelar TODAS as mensagens pendentes na fila.")) return;
@@ -307,6 +352,19 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
   const formatDate = (iso: string) => {
     const d = new Date(iso);
     return d.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  };
+
+  const formatWebhookDate = (iso: string) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return d.toLocaleString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
   };
 
   const formatRelative = (iso: string) => {
@@ -507,10 +565,17 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
                                     {state.clearLoading ? "Apagando..." : "Apagar Fila"}
                                   </button>
                                 )}
+                                <button
+                                  onClick={() => handleWebhookErrors(entry)}
+                                  disabled={state.webhookLoading}
+                                  className="px-2.5 py-1 rounded-md bg-zinc-700 text-zinc-200 text-[10px] font-medium hover:bg-zinc-600 disabled:opacity-50 transition-colors"
+                                >
+                                  {state.webhookLoading ? "Carregando..." : state.webhookErrors !== null ? "Fechar Erros" : "Erros Webhook"}
+                                </button>
                               </div>
                             )}
 
-                            {(state.delayResult || state.resetResult || state.clearResult) && (
+                            {(state.delayResult || state.resetResult || state.clearResult || state.webhookError) && (
                               <div className="mt-1.5 flex flex-wrap gap-2">
                                 {state.delayResult && (
                                   <span className={`text-[10px] ${state.delayResult.includes("reduzido") ? "text-green-400" : "text-red-400"}`}>
@@ -526,6 +591,56 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
                                   <span className={`text-[10px] ${state.clearResult.includes("apagada") ? "text-green-400" : "text-red-400"}`}>
                                     {state.clearResult}
                                   </span>
+                                )}
+                                {state.webhookError && (
+                                  <span className="text-[10px] text-red-400">{state.webhookError}</span>
+                                )}
+                              </div>
+                            )}
+
+                            {state.webhookErrors !== null && (
+                              <div className="mt-2 rounded-lg border border-zinc-700 bg-zinc-800/60 overflow-hidden">
+                                <div className="px-2.5 py-1.5 bg-zinc-800 border-b border-zinc-700 flex items-center justify-between">
+                                  <span className="text-[10px] font-semibold text-zinc-300">
+                                    Erros de Webhook ({state.webhookErrors.length})
+                                  </span>
+                                </div>
+                                {state.webhookErrors.length === 0 ? (
+                                  <div className="px-2.5 py-3 text-center">
+                                    <span className="text-[10px] text-green-400">Nenhum erro de webhook</span>
+                                  </div>
+                                ) : (
+                                  <div className="max-h-60 overflow-y-auto divide-y divide-zinc-700/50">
+                                    {state.webhookErrors.map((err, idx) => (
+                                      <div key={idx} className="px-2.5 py-2 space-y-1">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className={`text-[10px] font-bold ${err.statusCode >= 500 ? "text-red-400" : err.statusCode >= 400 ? "text-amber-400" : "text-zinc-400"}`}>
+                                            {err.statusCode}
+                                          </span>
+                                          <span className="text-[10px] text-zinc-400 bg-zinc-700/60 px-1.5 py-0.5 rounded">
+                                            {err.event}
+                                          </span>
+                                          {err.messageType && (
+                                            <span className="text-[10px] text-zinc-500 bg-zinc-700/40 px-1.5 py-0.5 rounded">
+                                              {err.messageType}
+                                            </span>
+                                          )}
+                                          <span className="text-[10px] text-zinc-600">
+                                            {err.attempts}x
+                                          </span>
+                                          <span className="text-[10px] text-zinc-600 ml-auto">
+                                            {formatWebhookDate(err.created)}
+                                          </span>
+                                        </div>
+                                        <div className="text-[10px] text-red-300/80 break-all">
+                                          {err.error}
+                                        </div>
+                                        <div className="text-[9px] text-zinc-600 break-all truncate" title={err.url}>
+                                          {err.url}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
                                 )}
                               </div>
                             )}
