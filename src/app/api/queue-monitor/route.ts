@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServers, saveQueueData, getQueueData, getWebhookUrl, saveLog, incrementQueueFail, resetQueueFail, getConnectedInstances } from "@/lib/kv";
+import { getServers, saveQueueData, getQueueData, getWebhookUrl, saveLog, incrementQueueFail, resetQueueFail, getConnectedInstances, getAutoResetDone, saveAutoResetDone } from "@/lib/kv";
 import { fetchAllInstances, isConnected } from "@/lib/uazapi";
 import { sendPushToAll } from "@/lib/push";
 import { QueueEntry } from "@/lib/types";
@@ -300,7 +300,9 @@ export async function GET(request: NextRequest) {
     queueEntries.sort((a, b) => b.pending - a.pending);
     await saveQueueData(queueEntries);
 
-    const toReset = queueEntries.filter((e) => e.pending >= AUTO_RESET_THRESHOLD && e.token);
+    const alreadyReset = await getAutoResetDone();
+    const highQueue = queueEntries.filter((e) => e.pending >= AUTO_RESET_THRESHOLD && e.token);
+    const toReset = highQueue.filter((e) => !alreadyReset.has(`${e.server}-${e.number}`));
     let resetCount = 0;
     let resetFailed = 0;
 
@@ -327,18 +329,29 @@ export async function GET(request: NextRequest) {
         })
       );
 
-      for (const r of resetResults) {
+      for (let i = 0; i < resetResults.length; i++) {
+        const r = resetResults[i];
         if (r.status === "fulfilled" && r.value) {
           resetCount++;
+          alreadyReset.add(`${toReset[i].server}-${toReset[i].number}`);
         } else {
           resetFailed++;
         }
       }
 
       if (resetCount > 0 || resetFailed > 0) {
-        console.log(`Auto-reset: ${resetCount} reiniciadas, ${resetFailed} falharam (de ${toReset.length} com fila >= ${AUTO_RESET_THRESHOLD})`);
+        console.log(`Auto-reset: ${resetCount} reiniciadas, ${resetFailed} falharam, ${highQueue.length - toReset.length} puladas (já resetadas)`);
       }
     }
+
+    const currentHighKeys = new Set(highQueue.map((e) => `${e.server}-${e.number}`));
+    for (const key of alreadyReset) {
+      if (!currentHighKeys.has(key)) {
+        alreadyReset.delete(key);
+      }
+    }
+
+    await saveAutoResetDone(alreadyReset);
 
     const alertEntries = queueEntries.filter((e) => e.pending > QUEUE_ALERT_THRESHOLD);
 

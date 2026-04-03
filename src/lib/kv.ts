@@ -322,6 +322,23 @@ export async function getConnectedInstances(): Promise<CachedInstance[]> {
   return data || [];
 }
 
+// --- Auto-Reset Tracking ---
+
+const AUTO_RESET_DONE_KEY = "uazapi:auto_reset_done";
+
+export async function getAutoResetDone(): Promise<Set<string>> {
+  if (!isRedisConfigured()) return new Set();
+  const redis = getRedis();
+  const data = await redis.get<string[]>(AUTO_RESET_DONE_KEY);
+  return new Set(data || []);
+}
+
+export async function saveAutoResetDone(done: Set<string>): Promise<void> {
+  if (!isRedisConfigured()) return;
+  const redis = getRedis();
+  await redis.set(AUTO_RESET_DONE_KEY, Array.from(done));
+}
+
 // --- Queue Server Fail Tracking ---
 
 const QUEUE_FAIL_PREFIX = "uazapi:queue_fail:";
