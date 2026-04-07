@@ -4,13 +4,13 @@ import { verifySession } from "@/lib/auth";
 const PUBLIC_PREFIX_PATHS = [
   "/api/auth/login",
   "/api/poll",
-  "/api/fila",
   "/login",
-  "/fila",
 ];
 
 const PUBLIC_EXACT_PATHS = [
   "/api/queue-monitor",
+  "/api/fila",
+  "/fila",
 ];
 
 function isPublicPath(pathname: string): boolean {

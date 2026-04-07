@@ -1,11 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServers } from "@/lib/kv";
 import { fetchAllInstances, getInstanceNumber } from "@/lib/uazapi";
+import { Redis } from "@upstash/redis";
 
 export const maxDuration = 60;
 
+const redis = Redis.fromEnv();
+const RATE_LIMIT_KEY = "fila:rate:";
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW = 60;
+
+async function checkRateLimit(ip: string): Promise<boolean> {
+  const key = `${RATE_LIMIT_KEY}${ip}`;
+  const current = await redis.incr(key);
+  if (current === 1) {
+    await redis.expire(key, RATE_LIMIT_WINDOW);
+  }
+  return current <= RATE_LIMIT_MAX;
+}
+
 export async function GET(request: NextRequest) {
   try {
+    const ip =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      request.headers.get("x-real-ip") ||
+      "unknown";
+
+    const allowed = await checkRateLimit(ip);
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Muitas requisições. Aguarde um momento." },
+        { status: 429 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const number = searchParams.get("number");
 
@@ -21,8 +49,8 @@ export async function GET(request: NextRequest) {
 
     if (servers.length === 0) {
       return NextResponse.json(
-        { error: "Nenhum servidor disponível" },
-        { status: 500 }
+        { error: "Serviço indisponível" },
+        { status: 503 }
       );
     }
 
@@ -36,7 +64,7 @@ export async function GET(request: NextRequest) {
           const instNumber = getInstanceNumber(inst);
           if (instNumber.includes(searchTerm) || searchTerm.includes(instNumber)) {
             if (inst.token) {
-              return { server: server.name, token: inst.token, owner: instNumber };
+              return { server: server.name, token: inst.token };
             }
           }
         }
@@ -71,7 +99,7 @@ export async function GET(request: NextRequest) {
 
       if (!res.ok) {
         return NextResponse.json(
-          { found: true, server: foundServer, error: "Não foi possível verificar a fila" },
+          { found: true, error: "Não foi possível verificar a fila" },
           { status: 200 }
         );
       }
@@ -81,7 +109,6 @@ export async function GET(request: NextRequest) {
 
       return NextResponse.json({
         found: true,
-        server: foundServer,
         queue: {
           pending: q.pending ?? 0,
           status: q.status ?? "unknown",
@@ -93,7 +120,7 @@ export async function GET(request: NextRequest) {
     } catch {
       clearTimeout(timeout);
       return NextResponse.json(
-        { found: true, server: foundServer, error: "Timeout ao verificar fila" },
+        { found: true, error: "Timeout ao verificar fila" },
         { status: 200 }
       );
     }

@@ -4,7 +4,6 @@ import { useState } from "react";
 
 interface QueueResult {
   found: boolean;
-  server?: string;
   error?: string;
   queue?: {
     pending: number;
@@ -119,9 +118,7 @@ export default function FilaPage() {
 
           {result?.found && result.error && (
             <div className="mt-4 bg-amber-950/30 border border-amber-900/40 rounded-xl px-4 py-3">
-              <p className="text-sm text-amber-400">
-                Encontrado em {result.server}, mas: {result.error}
-              </p>
+              <p className="text-sm text-amber-400">{result.error}</p>
             </div>
           )}
 
@@ -152,17 +149,11 @@ export default function FilaPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div className="bg-zinc-800/50 rounded-lg px-3 py-2.5">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wide">Status</p>
-                  <p className="text-sm text-zinc-200 font-medium mt-0.5">
-                    {STATUS_LABELS[result.queue.status] || result.queue.status}
-                  </p>
-                </div>
-                <div className="bg-zinc-800/50 rounded-lg px-3 py-2.5">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wide">Servidor</p>
-                  <p className="text-sm text-zinc-200 font-medium mt-0.5">{result.server}</p>
-                </div>
+              <div className="bg-zinc-800/50 rounded-lg px-3 py-2.5">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-wide">Status</p>
+                <p className="text-sm text-zinc-200 font-medium mt-0.5">
+                  {STATUS_LABELS[result.queue.status] || result.queue.status}
+                </p>
               </div>
 
               <div className="flex flex-wrap gap-1.5">
