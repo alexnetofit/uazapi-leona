@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServers, getConnectedInstances, getQueueData } from "@/lib/kv";
+import { getServers, getConnectedInstances, getQueueData, getCachedDc } from "@/lib/kv";
 import { fetchAllInstances, getInstanceNumber } from "@/lib/uazapi";
 import { getUserRole } from "@/lib/api-auth";
 
@@ -309,6 +309,12 @@ async function handleBatchCheckAll() {
     return NextResponse.json({ results: [] });
   }
 
+  const uniqueServers = Array.from(new Set(cachedEntries.map((e) => e.server)));
+  const dcEntries = await Promise.all(
+    uniqueServers.map(async (name) => [name, await getCachedDc(name)] as const)
+  );
+  const dcMap = new Map(dcEntries);
+
   const toCheck = cachedEntries.filter((e) => e.token);
 
   if (toCheck.length === 0) {
@@ -323,6 +329,7 @@ async function handleBatchCheckAll() {
         processingNow: e.processingNow,
         sessionReady: e.sessionReady,
         resetting: e.resetting,
+        dc: dcMap.get(e.server) || "",
       })),
     });
   }
@@ -352,6 +359,7 @@ async function handleBatchCheckAll() {
             processingNow: entry.processingNow,
             sessionReady: entry.sessionReady,
             resetting: entry.resetting,
+            dc: dcMap.get(entry.server) || "",
           };
         }
         const data = await res.json();
@@ -366,6 +374,7 @@ async function handleBatchCheckAll() {
           processingNow: q.processingNow ?? false,
           sessionReady: q.sessionReady ?? false,
           resetting: q.resetting ?? false,
+          dc: dcMap.get(entry.server) || "",
         };
       } catch {
         clearTimeout(timeout);
@@ -379,6 +388,7 @@ async function handleBatchCheckAll() {
           processingNow: entry.processingNow,
           sessionReady: entry.sessionReady,
           resetting: entry.resetting,
+          dc: dcMap.get(entry.server) || "",
         };
       }
     })

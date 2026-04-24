@@ -13,6 +13,7 @@ interface QueueEntry {
   sessionReady: boolean;
   resetting: boolean;
   checkedAt: string;
+  dc?: string;
 }
 
 interface WebhookError {
@@ -195,6 +196,7 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
             sessionReady: (r.sessionReady as boolean) || false,
             resetting: (r.resetting as boolean) || false,
             checkedAt: new Date().toISOString(),
+            dc: (r.dc as string) || "",
           }));
 
         allResults.sort((a, b) => b.pending - a.pending);
@@ -528,6 +530,11 @@ export default function QueuePanel({ isOpen, onClose, isAdmin }: QueuePanelProps
                                 <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded shrink-0">
                                   {entry.server}
                                 </span>
+                                {entry.dc && (
+                                  <span className="text-[10px] font-medium text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded shrink-0">
+                                    {entry.dc.toUpperCase()}
+                                  </span>
+                                )}
                               </div>
                               <div className="flex items-center gap-1.5 shrink-0 ml-2">
                                 <span className={`text-lg font-bold ${tier.pendingColor}`}>

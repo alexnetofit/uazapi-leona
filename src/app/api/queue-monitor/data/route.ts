@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getQueueData, getQueueLastCheck } from "@/lib/kv";
+import { getQueueData, getQueueLastCheck, getCachedDc } from "@/lib/kv";
 import { getUserRole } from "@/lib/api-auth";
 
 export async function GET(request: NextRequest) {
@@ -8,9 +8,16 @@ export async function GET(request: NextRequest) {
     const entries = await getQueueData();
     const lastCheck = await getQueueLastCheck();
 
+    const uniqueServers = Array.from(new Set(entries.map((e) => e.server)));
+    const dcEntries = await Promise.all(
+      uniqueServers.map(async (name) => [name, await getCachedDc(name)] as const)
+    );
+    const dcMap = new Map(dcEntries);
+
     const safeEntries = entries.map((entry) => ({
       ...entry,
       token: role === "admin" ? entry.token : undefined,
+      dc: dcMap.get(entry.server) || "",
     }));
 
     return NextResponse.json({
