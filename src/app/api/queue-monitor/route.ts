@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServers, saveQueueData, getQueueData, getWebhookUrl, saveLog, incrementQueueFail, resetQueueFail, getConnectedInstances, getAutoResetDone, saveAutoResetDone } from "@/lib/kv";
+import { getServers, saveQueueData, getQueueData, getWebhookUrl, saveLog, incrementQueueFail, resetQueueFail, getConnectedInstances } from "@/lib/kv";
 import { fetchAllInstances, isConnected } from "@/lib/uazapi";
 import { sendPushToAll } from "@/lib/push";
 import { QueueEntry } from "@/lib/types";
@@ -7,9 +7,7 @@ import { QueueEntry } from "@/lib/types";
 export const maxDuration = 60;
 
 const QUEUE_ALERT_THRESHOLD = 40;
-const AUTO_RESET_THRESHOLD = 20;
 const FETCH_TIMEOUT_MS = 8000;
-const RESET_TIMEOUT_MS = 6000;
 const CONCURRENCY_PER_SERVER = 50;
 
 type InstanceItem = { server: string; name: string; owner: string; token: string };
@@ -299,59 +297,6 @@ export async function GET(request: NextRequest) {
 
     queueEntries.sort((a, b) => b.pending - a.pending);
     await saveQueueData(queueEntries);
-
-    const alreadyReset = await getAutoResetDone();
-    const highQueue = queueEntries.filter((e) => e.pending >= AUTO_RESET_THRESHOLD && e.token);
-    const toReset = highQueue.filter((e) => !alreadyReset.has(`${e.server}-${e.number}`));
-    let resetCount = 0;
-    let resetFailed = 0;
-
-    if (toReset.length > 0) {
-      const resetResults = await Promise.allSettled(
-        toReset.map(async (entry) => {
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), RESET_TIMEOUT_MS);
-          try {
-            const res = await fetch(
-              `https://${entry.server}.uazapi.com/instance/reset`,
-              {
-                method: "POST",
-                headers: { Accept: "application/json", token: entry.token },
-                signal: controller.signal,
-              }
-            );
-            clearTimeout(timeout);
-            return res.ok;
-          } catch {
-            clearTimeout(timeout);
-            return false;
-          }
-        })
-      );
-
-      for (let i = 0; i < resetResults.length; i++) {
-        const r = resetResults[i];
-        if (r.status === "fulfilled" && r.value) {
-          resetCount++;
-          alreadyReset.add(`${toReset[i].server}-${toReset[i].number}`);
-        } else {
-          resetFailed++;
-        }
-      }
-
-      if (resetCount > 0 || resetFailed > 0) {
-        console.log(`Auto-reset: ${resetCount} reiniciadas, ${resetFailed} falharam, ${highQueue.length - toReset.length} puladas (já resetadas)`);
-      }
-    }
-
-    const currentHighKeys = new Set(highQueue.map((e) => `${e.server}-${e.number}`));
-    for (const key of alreadyReset) {
-      if (!currentHighKeys.has(key)) {
-        alreadyReset.delete(key);
-      }
-    }
-
-    await saveAutoResetDone(alreadyReset);
 
     const alertEntries = queueEntries.filter((e) => e.pending > QUEUE_ALERT_THRESHOLD);
 
