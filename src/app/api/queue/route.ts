@@ -91,6 +91,10 @@ export async function POST(request: NextRequest) {
       return handleTestSync(server, token);
     }
 
+    if (action === "wa-limits") {
+      return handleWaLimits(server, token);
+    }
+
     if (action === "clear-queue") {
       const role = getUserRole(request);
       if (role !== "admin") {
@@ -271,6 +275,41 @@ async function handleTestSync(serverName: string, instanceToken: string) {
     clearTimeout(timeout);
     return NextResponse.json(
       { error: "Timeout ao enviar teste sync" },
+      { status: 504 }
+    );
+  }
+}
+
+async function handleWaLimits(serverName: string, instanceToken: string) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const res = await fetch(
+      `https://${serverName}.uazapi.com/instance/wa_messages_limits`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          token: instanceToken,
+        },
+        signal: controller.signal,
+      }
+    );
+    clearTimeout(timeout);
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      return NextResponse.json(
+        { error: "Erro ao verificar bloqueio", details: data },
+        { status: res.status }
+      );
+    }
+
+    return NextResponse.json({ success: true, data });
+  } catch {
+    clearTimeout(timeout);
+    return NextResponse.json(
+      { error: "Timeout ao verificar bloqueio" },
       { status: 504 }
     );
   }

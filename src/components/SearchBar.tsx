@@ -26,6 +26,9 @@ interface ResultEntry {
   clearResult: string;
   syncLoading: boolean;
   syncResult: string;
+  limitsLoading: boolean;
+  limitsData: unknown;
+  limitsError: string;
 }
 
 interface SearchBarProps {
@@ -60,6 +63,9 @@ export default function SearchBar({ userRole }: SearchBarProps) {
     clearResult: "",
     syncLoading: false,
     syncResult: "",
+    limitsLoading: false,
+    limitsData: null,
+    limitsError: "",
   });
 
   const handleSearch = async () => {
@@ -269,6 +275,43 @@ export default function SearchBar({ userRole }: SearchBarProps) {
     }
   };
 
+  const handleCheckLimits = async (index: number) => {
+    const entry = results[index];
+    const number = entry.instance.owner || entry.instance.name || "";
+
+    if (entry.limitsData !== null || entry.limitsError) {
+      updateResult(index, { limitsData: null, limitsError: "" });
+      return;
+    }
+
+    updateResult(index, { limitsLoading: true, limitsData: null, limitsError: "" });
+
+    try {
+      const res = await fetch("/api/queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "wa-limits",
+          server: entry.server,
+          number,
+          instanceToken: entry.instance.token || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        updateResult(index, { limitsData: data.data ?? data });
+      } else {
+        const detail = data.details ? `\n${JSON.stringify(data.details, null, 2)}` : "";
+        updateResult(index, { limitsError: `${data.error || "Erro ao verificar bloqueio"}${detail}` });
+      }
+    } catch {
+      updateResult(index, { limitsError: "Erro ao conectar" });
+    } finally {
+      updateResult(index, { limitsLoading: false });
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       handleSearch();
@@ -337,21 +380,55 @@ export default function SearchBar({ userRole }: SearchBarProps) {
               key={`${entry.server}-${index}`}
               className="bg-emerald-950/20 border border-emerald-800 rounded-xl p-3 sm:p-4"
             >
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                  <span className="font-semibold text-emerald-300 text-sm sm:text-base">
+              <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                  <span className="font-semibold text-emerald-300 text-sm sm:text-base truncate">
                     Encontrado no servidor: {entry.server}
                   </span>
                 </div>
-                <button
-                  onClick={() => handleCheckQueue(index)}
-                  disabled={entry.queueLoading}
-                  className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
-                >
-                  {entry.queueLoading ? "Verificando..." : "Verificar Fila"}
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => handleCheckLimits(index)}
+                    disabled={entry.limitsLoading}
+                    className="px-3 py-1.5 rounded-lg bg-purple-600 text-white text-xs font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                  >
+                    {entry.limitsLoading
+                      ? "Verificando..."
+                      : entry.limitsData !== null || entry.limitsError
+                        ? "Fechar Bloqueio"
+                        : "Verificar Bloqueio"}
+                  </button>
+                  <button
+                    onClick={() => handleCheckQueue(index)}
+                    disabled={entry.queueLoading}
+                    className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                  >
+                    {entry.queueLoading ? "Verificando..." : "Verificar Fila"}
+                  </button>
+                </div>
               </div>
+
+              {(entry.limitsData !== null || entry.limitsError) && (
+                <div className="mb-3 rounded-lg border border-purple-800/60 bg-purple-950/30 overflow-hidden">
+                  <div className="px-3 py-1.5 bg-purple-950/60 border-b border-purple-800/50 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-purple-300">
+                      Limites / Bloqueio WhatsApp
+                    </span>
+                  </div>
+                  <div className="p-3 max-h-80 overflow-auto">
+                    {entry.limitsError ? (
+                      <pre className="text-[11px] text-red-300 whitespace-pre-wrap break-all font-mono">
+                        {entry.limitsError}
+                      </pre>
+                    ) : (
+                      <pre className="text-[11px] text-zinc-200 whitespace-pre-wrap break-all font-mono">
+                        {JSON.stringify(entry.limitsData, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm overflow-x-auto">
                 {Object.entries(entry.instance).map(([key, value]) => (
