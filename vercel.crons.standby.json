@@ -1,0 +1,13 @@
+{
+  "_standby_note": "Copiar o array crons abaixo para vercel.json para reativar polling automático. Ver STANDBY.md",
+  "crons": [
+    {
+      "path": "/api/poll",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/queue-monitor",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}

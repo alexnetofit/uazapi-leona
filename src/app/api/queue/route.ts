@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServers, getConnectedInstances, getQueueData, getCachedDc } from "@/lib/kv";
+import { getServers } from "@/lib/kv";
 import { fetchAllInstances, getInstanceNumber } from "@/lib/uazapi";
 import { getUserRole } from "@/lib/api-auth";
 
@@ -30,9 +30,11 @@ export async function POST(request: NextRequest) {
       return handleBatchCheck(body.instances || []);
     }
 
+    /* STANDBY: batch-check-all — usado pelo QueuePanel (ver STANDBY.md)
     if (action === "batch-check-all") {
       return handleBatchCheckAll();
     }
+    */
 
     if (action === "restart-server") {
       if (!server) {
@@ -339,6 +341,7 @@ async function handleClearQueue(serverName: string, instanceToken: string) {
   return NextResponse.json({ success: true, data });
 }
 
+/* STANDBY: handleBatchCheckAll — usado pelo QueuePanel (ver STANDBY.md)
 const BATCH_CHECK_TIMEOUT_MS = 6000;
 
 async function handleBatchCheckAll() {
@@ -441,6 +444,7 @@ async function handleBatchCheckAll() {
   checked.sort((a, b) => (b.pending as number) - (a.pending as number));
   return NextResponse.json({ results: checked });
 }
+*/
 
 async function handleRestartServer(serverName: string) {
   const servers = await getServers();

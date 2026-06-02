@@ -289,6 +289,8 @@ export function shouldFetchDcToday(lastFetch: string | null): boolean {
   return brtNow.toDateString() !== brtLast.toDateString();
 }
 
+// --- STANDBY: funções abaixo usadas pelo queue-monitor (ver STANDBY.md) ---
+
 // --- Queue Data ---
 
 const QUEUE_DATA_KEY = "uazapi:queue_data";

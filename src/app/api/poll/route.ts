@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServers, getSnapshotsByNames, batchSaveSnapshots, getWebhookUrl, setLastPoll, saveLog, getCachedDc, saveDcCache, getDcLastFetch, setDcLastFetch, shouldFetchDcToday, saveConnectedInstances, buildUnreachableSnapshot, CachedInstance } from "@/lib/kv";
+import { getServers, getSnapshotsByNames, batchSaveSnapshots, getWebhookUrl, setLastPoll, saveLog, getCachedDc, saveDcCache, getDcLastFetch, setDcLastFetch, shouldFetchDcToday, buildUnreachableSnapshot, CachedInstance } from "@/lib/kv";
 import { fetchServerStatus, fetchAllInstances, isConnected } from "@/lib/uazapi";
 import { sendPushToAll } from "@/lib/push";
 import { ServerSnapshot, WebhookAlert } from "@/lib/types";
@@ -234,7 +234,8 @@ export async function GET(request: NextRequest) {
     await Promise.all([
       batchSaveSnapshots(newSnapshots, snapshotsMap),
       setLastPoll(new Date().toISOString()),
-      saveConnectedInstances(allConnectedInstances),
+      // STANDBY: cache para queue-monitor — reativar com STANDBY.md
+      // saveConnectedInstances(allConnectedInstances),
     ]);
 
     return NextResponse.json({

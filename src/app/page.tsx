@@ -9,11 +9,13 @@ import SearchBar from "@/components/SearchBar";
 import WebhookConfig from "@/components/WebhookConfig";
 import PushNotification from "@/components/PushNotification";
 import LogsPanel from "@/components/LogsPanel";
-import QueuePanel from "@/components/QueuePanel";
+// STANDBY: monitor de filas — reativar junto com cron /api/queue-monitor (ver STANDBY.md)
+// import QueuePanel from "@/components/QueuePanel";
 import GroupsPanel from "@/components/GroupsPanel";
 import { DashboardData } from "@/lib/types";
 import { UserRole } from "@/lib/auth";
 
+/* STANDBY: auto-refresh countdown — reativar com cron /api/poll (ver STANDBY.md)
 const POLL_INTERVAL_SECONDS = 120;
 
 function calcSecondsUntilNextPoll(lastPoll: string | null): number {
@@ -23,15 +25,16 @@ function calcSecondsUntilNextPoll(lastPoll: string | null): number {
   const remaining = Math.round((nextPollTime - Date.now()) / 1000);
   return Math.max(0, Math.min(remaining, POLL_INTERVAL_SECONDS));
 }
+*/
 
 export default function Home() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [servers, setServers] = useState<{ name: string }[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [countdown, setCountdown] = useState(POLL_INTERVAL_SECONDS);
   const [showLogs, setShowLogs] = useState(false);
-  const [showQueues, setShowQueues] = useState(false);
+  // STANDBY: monitor de filas
+  // const [showQueues, setShowQueues] = useState(false);
   const [showGroups, setShowGroups] = useState(false);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [refreshingServers, setRefreshingServers] = useState<Set<string>>(new Set());
@@ -108,6 +111,7 @@ export default function Home() {
     }
   }, []);
 
+  /* STANDBY: poll em lote via GET /api/poll (usado pelo cron)
   const triggerPoll = useCallback(async () => {
     try {
       const controller = new AbortController();
@@ -118,14 +122,13 @@ export default function Home() {
       console.error("Erro ao disparar polling:", error);
     }
   }, []);
+  */
 
   const loadData = useCallback(async () => {
     if (loadingRef.current) return;
     loadingRef.current = true;
     setLoading(true);
-    const [statusData] = await Promise.all([fetchStatus(), fetchServers()]);
-    const remaining = calcSecondsUntilNextPoll(statusData?.lastPoll ?? null);
-    setCountdown(remaining > 0 ? remaining : POLL_INTERVAL_SECONDS);
+    await Promise.all([fetchStatus(), fetchServers()]);
     setLoading(false);
     loadingRef.current = false;
   }, [fetchStatus, fetchServers]);
@@ -135,26 +138,27 @@ export default function Home() {
     loadingRef.current = true;
     setLoading(true);
 
-    const serverList = data?.servers ?? [];
+    const serverNames =
+      data?.servers?.map((s) => s.serverName) ??
+      servers.map((s) => s.name);
 
-    if (serverList.length > 0) {
-      const serverNames = serverList.map((s) => s.serverName);
+    if (serverNames.length > 0) {
       setRefreshingServers(new Set(serverNames));
 
       await Promise.allSettled(
-        serverList.map(async (server) => {
+        serverNames.map(async (serverName) => {
           try {
             await fetch("/api/poll/server", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ serverName: server.serverName }),
+              body: JSON.stringify({ serverName }),
             });
           } catch (err) {
-            console.error(`Erro ao pollar ${server.serverName}:`, err);
+            console.error(`Erro ao pollar ${serverName}:`, err);
           } finally {
             setRefreshingServers((prev) => {
               const next = new Set(prev);
-              next.delete(server.serverName);
+              next.delete(serverName);
               return next;
             });
           }
@@ -162,22 +166,19 @@ export default function Home() {
       );
 
       setRefreshingServers(new Set());
-    } else {
-      await triggerPoll();
     }
 
-    const [statusData] = await Promise.all([fetchStatus(), fetchServers()]);
-    const remaining = calcSecondsUntilNextPoll(statusData?.lastPoll ?? null);
-    setCountdown(remaining > 0 ? remaining : POLL_INTERVAL_SECONDS);
+    await Promise.all([fetchStatus(), fetchServers()]);
     setLoading(false);
     loadingRef.current = false;
-  }, [fetchStatus, fetchServers, triggerPoll, data]);
+  }, [fetchStatus, fetchServers, data, servers]);
 
   useEffect(() => {
     if (userRole) loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userRole]);
 
+  /* STANDBY: auto-refresh a cada 2 min (re-lê /api/status)
   useEffect(() => {
     if (!userRole) return;
     const interval = setInterval(() => {
@@ -195,6 +196,7 @@ export default function Home() {
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userRole]);
+  */
 
   const handleAddServer = async (name: string, token: string) => {
     const res = await fetch("/api/servers", {
@@ -226,11 +228,13 @@ export default function Home() {
     }
   };
 
+  /* STANDBY: formatCountdown
   const formatCountdown = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
+  */
 
   if (!userRole) {
     return (
@@ -277,13 +281,11 @@ export default function Home() {
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
+              {/* STANDBY: countdown auto-refresh
               <div className="flex items-center gap-1.5 text-xs sm:text-xs text-zinc-400 bg-zinc-800 px-2.5 sm:px-3 py-2 rounded-lg">
-                <svg className="animate-spin h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" style={{ animationDuration: "3s" }}>
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
-                  <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" />
-                </svg>
-                {formatCountdown(countdown)}
+                ...
               </div>
+              */}
 
               {isAdmin && (
                 <button
@@ -315,15 +317,15 @@ export default function Home() {
                 </button>
               )}
 
+              {/* STANDBY: monitor de filas — reativar com STANDBY.md
               <button
                 onClick={() => setShowQueues(true)}
                 className="p-2 sm:px-3 sm:py-2 rounded-lg text-xs bg-zinc-800 text-amber-400 hover:bg-zinc-700 transition-colors"
                 title="Filas grandes"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                </svg>
+                ...
               </button>
+              */}
 
               <button
                 onClick={() => setShowLogs(true)}
@@ -470,8 +472,8 @@ export default function Home() {
             ) : (
               <div className="text-center py-12">
                 <p className="text-zinc-400 text-sm">
-                  Servidores cadastrados mas sem dados ainda. Aguarde o próximo
-                  polling ou clique em &quot;Atualizar&quot;.
+                  Servidores cadastrados mas sem dados ainda. Clique em
+                  &quot;Atualizar&quot; para buscar os dados.
                 </p>
               </div>
             )}
@@ -487,7 +489,9 @@ export default function Home() {
         />
       )}
 
+      {/* STANDBY: monitor de filas
       <QueuePanel isOpen={showQueues} onClose={() => setShowQueues(false)} isAdmin={isAdmin} />
+      */}
       <LogsPanel isOpen={showLogs} onClose={() => setShowLogs(false)} isAdmin={isAdmin} />
 
       {isAdmin && (

@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+// STANDBY: desativado — ver STANDBY.md (QUEUE_MONITOR_STANDBY)
 import { getQueueData, getQueueLastCheck, getCachedDc } from "@/lib/kv";
 import { getUserRole } from "@/lib/api-auth";
 
+const QUEUE_MONITOR_STANDBY = true;
+
 export async function GET(request: NextRequest) {
+  if (QUEUE_MONITOR_STANDBY) {
+    return NextResponse.json({
+      entries: [],
+      lastCheck: null,
+      standby: true,
+    });
+  }
+
   try {
     const role = getUserRole(request);
     const entries = await getQueueData();

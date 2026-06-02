@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+// STANDBY: desativado — cron removido de vercel.json. Reativar: QUEUE_MONITOR_STANDBY = false (ver STANDBY.md)
 import { getServers, saveQueueData, getQueueData, getWebhookUrl, saveLog, incrementQueueFail, resetQueueFail, getConnectedInstances } from "@/lib/kv";
 import { fetchAllInstances, isConnected } from "@/lib/uazapi";
 import { sendPushToAll } from "@/lib/push";
 import { QueueEntry } from "@/lib/types";
 
 export const maxDuration = 60;
+
+const QUEUE_MONITOR_STANDBY = true;
 
 const QUEUE_ALERT_THRESHOLD = 40;
 const FETCH_TIMEOUT_MS = 8000;
@@ -123,6 +126,13 @@ async function checkBatchWithRetry(
 }
 
 export async function GET(request: NextRequest) {
+  if (QUEUE_MONITOR_STANDBY) {
+    return NextResponse.json({
+      message: "Queue monitor em standby",
+      skipped: true,
+    });
+  }
+
   const cronSecret = process.env.CRON_SECRET;
 
   if (cronSecret) {

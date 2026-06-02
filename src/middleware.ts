@@ -3,12 +3,14 @@ import { verifySession } from "@/lib/auth";
 
 const PUBLIC_PREFIX_PATHS = [
   "/api/auth/login",
-  "/api/poll",
+  // STANDBY: era público só por causa do cron — reativar com vercel.crons.standby.json
+  // "/api/poll",
   "/login",
 ];
 
 const PUBLIC_EXACT_PATHS = [
-  "/api/queue-monitor",
+  // STANDBY: monitor de filas
+  // "/api/queue-monitor",
   "/api/fila",
   "/fila",
 ];

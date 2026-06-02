@@ -1,5 +1,7 @@
 "use client";
 
+// STANDBY: painel desativado no dashboard — ver STANDBY.md
+
 import { useState, useEffect, useCallback } from "react";
 
 interface QueueEntry {
