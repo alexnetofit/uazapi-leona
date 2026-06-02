@@ -65,6 +65,22 @@ export async function getSnapshot(
   return data || null;
 }
 
+export function buildUnreachableSnapshot(
+  serverName: string,
+  dc = ""
+): ServerSnapshot {
+  return {
+    serverName,
+    instances: [],
+    totalInstances: 0,
+    connectedInstances: 0,
+    disconnectedInstances: 0,
+    timestamp: new Date().toISOString(),
+    dc,
+    error: true,
+  };
+}
+
 export async function saveSnapshot(snapshot: ServerSnapshot): Promise<void> {
   const redis = getRedis();
   // Salvar a contagem atual como "anterior" antes de sobrescrever

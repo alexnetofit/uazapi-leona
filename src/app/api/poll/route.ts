@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServers, getSnapshotsByNames, batchSaveSnapshots, getWebhookUrl, setLastPoll, saveLog, getCachedDc, saveDcCache, getDcLastFetch, setDcLastFetch, shouldFetchDcToday, saveConnectedInstances, CachedInstance } from "@/lib/kv";
+import { getServers, getSnapshotsByNames, batchSaveSnapshots, getWebhookUrl, setLastPoll, saveLog, getCachedDc, saveDcCache, getDcLastFetch, setDcLastFetch, shouldFetchDcToday, saveConnectedInstances, buildUnreachableSnapshot, CachedInstance } from "@/lib/kv";
 import { fetchServerStatus, fetchAllInstances, isConnected } from "@/lib/uazapi";
 import { sendPushToAll } from "@/lib/push";
 import { ServerSnapshot, WebhookAlert } from "@/lib/types";
@@ -110,6 +110,9 @@ export async function GET(request: NextRequest) {
                 },
               });
 
+              const dc = await getCachedDc(server.name);
+              newSnapshots.push(buildUnreachableSnapshot(server.name, dc));
+
               return { server: server.name, status: "error" as const, alert: true };
             }
           }
@@ -202,6 +205,7 @@ export async function GET(request: NextRequest) {
             disconnectedInstances: totalInstances - connectedInstances,
             timestamp: now,
             dc,
+            error: false,
           };
 
           newSnapshots.push(newSnapshot);
@@ -216,6 +220,8 @@ export async function GET(request: NextRequest) {
             `Erro ao consultar servidor ${server.name}:`,
             serverError
           );
+          const dc = await getCachedDc(server.name);
+          newSnapshots.push(buildUnreachableSnapshot(server.name, dc));
           return { server: server.name, status: "error" as const };
         }
       })

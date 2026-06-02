@@ -30,6 +30,7 @@ export interface ServerSnapshot {
   disconnectedInstances: number;
   timestamp: string;
   dc?: string;
+  error?: boolean;
 }
 
 export interface PreviousCount {

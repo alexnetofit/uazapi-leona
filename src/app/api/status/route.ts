@@ -24,7 +24,7 @@ export async function GET() {
           timestamp: snapshot.timestamp,
           previous,
           instances: [],
-          error: false,
+          error: snapshot.error === true,
           dc: snapshot.dc || "",
         };
       }
@@ -41,11 +41,13 @@ export async function GET() {
       };
     });
 
-    const totalInstances = snapshots.reduce(
+    const healthySnapshots = snapshots.filter((s) => s.error !== true);
+
+    const totalInstances = healthySnapshots.reduce(
       (sum, s) => sum + s.totalInstances,
       0
     );
-    const totalConnected = snapshots.reduce(
+    const totalConnected = healthySnapshots.reduce(
       (sum, s) => sum + s.connectedInstances,
       0
     );

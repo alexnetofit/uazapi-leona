@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServers, saveSnapshot, setLastPoll, getCachedDc } from "@/lib/kv";
+import { getServers, saveSnapshot, setLastPoll, getCachedDc, buildUnreachableSnapshot } from "@/lib/kv";
 import { fetchAllInstances, isConnected } from "@/lib/uazapi";
 import { ServerSnapshot } from "@/lib/types";
 
@@ -30,9 +30,15 @@ export async function POST(request: NextRequest) {
     try {
       instances = await fetchAllInstances(server.name, server.token);
     } catch {
+      const dc = await getCachedDc(server.name);
+      const errorSnapshot = buildUnreachableSnapshot(server.name, dc);
+      await saveSnapshot(errorSnapshot);
+      await setLastPoll(errorSnapshot.timestamp);
+
       return NextResponse.json({
         server: server.name,
         status: "error",
+        snapshot: errorSnapshot,
       });
     }
 
@@ -49,6 +55,7 @@ export async function POST(request: NextRequest) {
       disconnectedInstances: totalInstances - connectedInstances,
       timestamp: now,
       dc,
+      error: false,
     };
 
     await saveSnapshot(newSnapshot);
