@@ -1,23 +1,69 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServers } from "@/lib/kv";
-import { fetchAllInstances, getInstanceNumber } from "@/lib/uazapi";
+import {
+  fetchAllInstances,
+  getInstanceNumber,
+  fetchQueueStatus,
+  isConnected,
+} from "@/lib/uazapi";
+import { Instance } from "@/lib/types";
 import { Redis } from "@upstash/redis";
 
 export const maxDuration = 60;
 
-const redis = Redis.fromEnv();
 const RATE_LIMIT_KEY = "fila:rate:";
 const RATE_LIMIT_MAX = 10;
 const RATE_LIMIT_WINDOW = 60;
 
-async function checkRateLimit(ip: string): Promise<boolean> {
-  const key = `${RATE_LIMIT_KEY}${ip}`;
-  const current = await redis.incr(key);
-  if (current === 1) {
-    await redis.expire(key, RATE_LIMIT_WINDOW);
-  }
-  return current <= RATE_LIMIT_MAX;
+function getRedisClient(): Redis | null {
+  const url = process.env.KV_REST_API_URL;
+  const token = process.env.KV_REST_API_TOKEN;
+  if (!url || !token) return null;
+  return new Redis({ url, token });
 }
+
+async function checkRateLimit(ip: string): Promise<boolean> {
+  const redis = getRedisClient();
+  if (!redis) return true;
+
+  try {
+    const key = `${RATE_LIMIT_KEY}${ip}`;
+    const current = await redis.incr(key);
+    if (current === 1) {
+      await redis.expire(key, RATE_LIMIT_WINDOW);
+    }
+    return current <= RATE_LIMIT_MAX;
+  } catch {
+    return true;
+  }
+}
+
+function digitsOnly(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function instanceMatchesSearch(searchDigits: string, instance: Instance): boolean {
+  const candidates = [
+    digitsOnly(getInstanceNumber(instance)),
+    digitsOnly(instance.name || ""),
+  ].filter((d) => d.length >= 8);
+
+  if (candidates.length === 0) return false;
+
+  const searchKey = searchDigits.length > 8 ? searchDigits.slice(-8) : searchDigits;
+
+  for (const instDigits of candidates) {
+    if (instDigits === searchDigits) return true;
+    if (instDigits.includes(searchDigits) && searchDigits.length >= 8) return true;
+    if (searchDigits.includes(instDigits) && instDigits.length >= 8) return true;
+    const instKey = instDigits.length > 8 ? instDigits.slice(-8) : instDigits;
+    if (instKey === searchKey) return true;
+  }
+
+  return false;
+}
+
+type FoundInstance = { server: string; token: string; connected: boolean };
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,14 +83,14 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const number = searchParams.get("number");
 
-    if (!number || number.replace(/\D/g, "").length < 8) {
+    const searchDigits = digitsOnly(number || "");
+    if (searchDigits.length < 8) {
       return NextResponse.json(
         { error: "Informe pelo menos 8 dígitos" },
         { status: 400 }
       );
     }
 
-    const searchTerm = number.replace(/\D/g, "");
     const servers = await getServers();
 
     if (servers.length === 0) {
@@ -54,73 +100,46 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    let foundServer = "";
-    let foundToken = "";
+    const matches: FoundInstance[] = [];
 
-    const results = await Promise.allSettled(
+    await Promise.allSettled(
       servers.map(async (server) => {
         const instances = await fetchAllInstances(server.name, server.token);
         for (const inst of instances) {
-          const instNumber = getInstanceNumber(inst);
-          if (instNumber.includes(searchTerm) || searchTerm.includes(instNumber)) {
-            if (inst.token) {
-              return { server: server.name, token: inst.token };
-            }
-          }
+          if (!inst.token || !instanceMatchesSearch(searchDigits, inst)) continue;
+          matches.push({
+            server: server.name,
+            token: inst.token,
+            connected: isConnected(inst),
+          });
         }
-        return null;
       })
     );
 
-    for (const r of results) {
-      if (r.status === "fulfilled" && r.value) {
-        foundServer = r.value.server;
-        foundToken = r.value.token;
-        break;
-      }
-    }
-
-    if (!foundServer || !foundToken) {
+    if (matches.length === 0) {
       return NextResponse.json({ found: false });
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    // Preferir instância conectada; senão, a primeira encontrada
+    const best =
+      matches.find((m) => m.connected) ?? matches[0];
+
     try {
-      const res = await fetch(
-        `https://${foundServer}.uazapi.com/message/async`,
-        {
-          method: "GET",
-          headers: { Accept: "application/json", token: foundToken },
-          signal: controller.signal,
-        }
-      );
-      clearTimeout(timeout);
-
-      if (!res.ok) {
-        return NextResponse.json(
-          { found: true, error: "Não foi possível verificar a fila" },
-          { status: 200 }
-        );
-      }
-
-      const data = await res.json();
-      const q = data.queue || data;
+      const queue = await fetchQueueStatus(best.server, best.token);
 
       return NextResponse.json({
         found: true,
         queue: {
-          pending: q.pending ?? 0,
-          status: q.status ?? "unknown",
-          processingNow: q.processingNow ?? false,
-          sessionReady: q.sessionReady ?? false,
-          resetting: q.resetting ?? false,
+          pending: queue.pending,
+          status: queue.status,
+          processingNow: queue.processingNow,
+          sessionReady: queue.sessionReady,
+          resetting: queue.resetting,
         },
       });
     } catch {
-      clearTimeout(timeout);
       return NextResponse.json(
-        { found: true, error: "Timeout ao verificar fila" },
+        { found: true, error: "Não foi possível verificar a fila" },
         { status: 200 }
       );
     }
