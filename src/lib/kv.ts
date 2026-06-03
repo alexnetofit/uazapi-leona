@@ -1,5 +1,6 @@
 import { Redis } from "@upstash/redis";
 import { Server, ServerSnapshot, PreviousCount, NotificationLog, QueueEntry } from "./types";
+import { fetchServerStatus } from "./uazapi";
 
 const SERVERS_KEY = "uazapi:servers";
 const SNAPSHOT_PREFIX = "uazapi:snapshot:";
@@ -266,6 +267,18 @@ export async function saveDcCache(serverName: string, dc: string): Promise<void>
   if (!isRedisConfigured()) return;
   const redis = getRedis();
   await redis.set(`${DC_PREFIX}${serverName}`, dc);
+}
+
+/** Busca DC ao vivo em /status e atualiza o cache (fallback no cache se falhar). */
+export async function refreshServerDc(serverName: string): Promise<string> {
+  try {
+    const serverStatus = await fetchServerStatus(serverName);
+    const dc = serverStatus.dc || "";
+    await saveDcCache(serverName, dc);
+    return dc;
+  } catch {
+    return getCachedDc(serverName);
+  }
 }
 
 export async function getDcLastFetch(): Promise<string | null> {
