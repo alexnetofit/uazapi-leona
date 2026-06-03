@@ -12,8 +12,46 @@ import LogsPanel from "@/components/LogsPanel";
 // STANDBY: monitor de filas — reativar junto com cron /api/queue-monitor (ver STANDBY.md)
 // import QueuePanel from "@/components/QueuePanel";
 import GroupsPanel from "@/components/GroupsPanel";
-import { DashboardData } from "@/lib/types";
+import { DashboardData, ServerDashboard, ServerSnapshot } from "@/lib/types";
 import { UserRole } from "@/lib/auth";
+
+function buildDashboardFromServers(
+  servers: ServerDashboard[],
+  lastPoll: string | null = null
+): DashboardData {
+  const healthy = servers.filter((s) => !s.error);
+  const totalInstances = healthy.reduce((sum, s) => sum + s.totalInstances, 0);
+  const totalConnected = healthy.reduce((sum, s) => sum + s.connectedInstances, 0);
+  const newestTs = servers.reduce(
+    (max, s) => (s.timestamp && s.timestamp > max ? s.timestamp : max),
+    ""
+  );
+
+  return {
+    servers,
+    totalInstances,
+    totalConnected,
+    totalDisconnected: totalInstances - totalConnected,
+    lastPoll: lastPoll ?? (newestTs || null),
+  };
+}
+
+function snapshotToDashboard(
+  snapshot: ServerSnapshot,
+  previous: ServerDashboard["previous"]
+): ServerDashboard {
+  return {
+    serverName: snapshot.serverName,
+    totalInstances: snapshot.totalInstances,
+    connectedInstances: snapshot.connectedInstances,
+    disconnectedInstances: snapshot.disconnectedInstances,
+    timestamp: snapshot.timestamp,
+    previous,
+    instances: [],
+    error: snapshot.error === true,
+    dc: snapshot.dc || "",
+  };
+}
 
 /* STANDBY: auto-refresh countdown — reativar com cron /api/poll (ver STANDBY.md)
 const POLL_INTERVAL_SECONDS = 120;
@@ -65,7 +103,10 @@ export default function Home() {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10000);
-      const res = await fetch("/api/status", { signal: controller.signal });
+      const res = await fetch(`/api/status?_=${Date.now()}`, {
+        signal: controller.signal,
+        cache: "no-store",
+      });
       clearTimeout(timeout);
       if (res.ok) {
         const statusData = await res.json();
@@ -100,7 +141,10 @@ export default function Home() {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 10000);
-      const res = await fetch("/api/servers", { signal: controller.signal });
+      const res = await fetch(`/api/servers?_=${Date.now()}`, {
+        signal: controller.signal,
+        cache: "no-store",
+      });
       clearTimeout(timeout);
       if (res.ok) {
         const serverList = await res.json();
@@ -133,6 +177,44 @@ export default function Home() {
     loadingRef.current = false;
   }, [fetchStatus, fetchServers]);
 
+  const applyServerSnapshot = useCallback(
+    (serverName: string, snapshot: ServerSnapshot) => {
+      setData((prev) => {
+        const existing = prev?.servers ?? [];
+        const names =
+          existing.length > 0
+            ? existing.map((s) => s.serverName)
+            : servers.map((s) => s.name);
+
+        const byName = new Map(existing.map((s) => [s.serverName, s]));
+        for (const name of names) {
+          if (!byName.has(name)) {
+            byName.set(name, {
+              serverName: name,
+              totalInstances: 0,
+              connectedInstances: 0,
+              disconnectedInstances: 0,
+              timestamp: "",
+              previous: null,
+              instances: [],
+              error: true,
+            });
+          }
+        }
+
+        const prevServer = byName.get(serverName);
+        byName.set(
+          serverName,
+          snapshotToDashboard(snapshot, prevServer?.previous ?? null)
+        );
+
+        const ordered = names.map((name) => byName.get(name)!);
+        return buildDashboardFromServers(ordered, snapshot.timestamp);
+      });
+    },
+    [servers]
+  );
+
   const manualPoll = useCallback(async () => {
     if (loadingRef.current) return;
     loadingRef.current = true;
@@ -148,11 +230,16 @@ export default function Home() {
       await Promise.allSettled(
         serverNames.map(async (serverName) => {
           try {
-            await fetch("/api/poll/server", {
+            const res = await fetch("/api/poll/server", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ serverName }),
+              cache: "no-store",
             });
+            const body = await res.json();
+            if (body.snapshot) {
+              applyServerSnapshot(serverName, body.snapshot as ServerSnapshot);
+            }
           } catch (err) {
             console.error(`Erro ao pollar ${serverName}:`, err);
           } finally {
@@ -168,10 +255,11 @@ export default function Home() {
       setRefreshingServers(new Set());
     }
 
-    await Promise.all([fetchStatus(), fetchServers()]);
+    // Sincroniza totais e "anterior" vindos do Redis (sem cache CDN)
+    await fetchStatus();
     setLoading(false);
     loadingRef.current = false;
-  }, [fetchStatus, fetchServers, data, servers]);
+  }, [fetchStatus, applyServerSnapshot, data, servers]);
 
   useEffect(() => {
     if (userRole) loadData();
