@@ -62,9 +62,48 @@ export async function fetchServerStatus(
   };
 }
 
+export function digitsOnly(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+/** Normaliza busca: últimos 8 dígitos se tiver mais de 8 (igual ao SearchBar). */
+export function normalizeSearchDigits(input: string): string {
+  const digits = digitsOnly(input);
+  return digits.length > 8 ? digits.slice(-8) : digits;
+}
+
+export function instanceMatchesSearch(
+  searchDigits: string,
+  instance: Instance
+): boolean {
+  const candidates = [
+    digitsOnly(getInstanceNumber(instance)),
+    digitsOnly(instance.name || ""),
+  ].filter((d) => d.length >= 8);
+
+  if (candidates.length === 0) return false;
+
+  const searchKey =
+    searchDigits.length > 8 ? searchDigits.slice(-8) : searchDigits;
+
+  for (const instDigits of candidates) {
+    if (instDigits === searchDigits) return true;
+    if (instDigits.includes(searchDigits) && searchDigits.length >= 8)
+      return true;
+    if (searchDigits.includes(instDigits) && instDigits.length >= 8)
+      return true;
+    const instKey =
+      instDigits.length > 8 ? instDigits.slice(-8) : instDigits;
+    if (instKey === searchKey) return true;
+  }
+
+  return false;
+}
+
 export async function fetchAllInstances(
   serverName: string,
-  adminToken: string
+  adminToken: string,
+  timeoutMs = 12000
 ): Promise<Instance[]> {
   const url = `https://${serverName}.uazapi.com/instance/all`;
 
@@ -75,6 +114,7 @@ export async function fetchAllInstances(
       AdminToken: adminToken,
     },
     cache: "no-store",
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
   if (!response.ok) {

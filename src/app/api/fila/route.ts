@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServers } from "@/lib/kv";
 import {
   fetchAllInstances,
-  getInstanceNumber,
+  digitsOnly,
+  instanceMatchesSearch,
   fetchQueueStatus,
   isConnected,
 } from "@/lib/uazapi";
@@ -36,31 +37,6 @@ async function checkRateLimit(ip: string): Promise<boolean> {
   } catch {
     return true;
   }
-}
-
-function digitsOnly(value: string): string {
-  return value.replace(/\D/g, "");
-}
-
-function instanceMatchesSearch(searchDigits: string, instance: Instance): boolean {
-  const candidates = [
-    digitsOnly(getInstanceNumber(instance)),
-    digitsOnly(instance.name || ""),
-  ].filter((d) => d.length >= 8);
-
-  if (candidates.length === 0) return false;
-
-  const searchKey = searchDigits.length > 8 ? searchDigits.slice(-8) : searchDigits;
-
-  for (const instDigits of candidates) {
-    if (instDigits === searchDigits) return true;
-    if (instDigits.includes(searchDigits) && searchDigits.length >= 8) return true;
-    if (searchDigits.includes(instDigits) && instDigits.length >= 8) return true;
-    const instKey = instDigits.length > 8 ? instDigits.slice(-8) : instDigits;
-    if (instKey === searchKey) return true;
-  }
-
-  return false;
 }
 
 type FoundInstance = { server: string; token: string; connected: boolean };

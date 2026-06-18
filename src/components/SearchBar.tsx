@@ -83,7 +83,17 @@ export default function SearchBar({ userRole }: SearchBarProps) {
     try {
       const url = `/api/search?number=${encodeURIComponent(cleaned)}`;
       const res = await fetch(url);
-      const data: SearchResult = await res.json();
+      const raw = await res.text();
+      let data: SearchResult;
+      try {
+        data = JSON.parse(raw) as SearchResult;
+      } catch {
+        throw new Error(
+          res.status === 504 || raw.startsWith("An error")
+            ? "Busca expirou — algum servidor demorou demais. Tente de novo."
+            : "Resposta inválida do servidor"
+        );
+      }
       if (!res.ok) throw new Error((data as unknown as { error: string }).error || "Erro na busca");
 
       if (data.found && data.results && data.results.length > 0) {

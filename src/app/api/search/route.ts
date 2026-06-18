@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServers } from "@/lib/kv";
-import { fetchAllInstances, getInstanceNumber } from "@/lib/uazapi";
+import {
+  fetchAllInstances,
+  instanceMatchesSearch,
+  normalizeSearchDigits,
+} from "@/lib/uazapi";
 import { SearchResult, Instance } from "@/lib/types";
 import { getUserRole } from "@/lib/api-auth";
 
@@ -18,7 +22,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const searchTerm = number.trim();
+    const searchTerm = normalizeSearchDigits(number.trim());
     const skipServersParam = searchParams.get("skipServers") || "";
     const skipSet = new Set(
       skipServersParam ? skipServersParam.split(",").map((s) => s.trim()) : []
@@ -44,17 +48,15 @@ export async function GET(request: NextRequest) {
 
     const results = await Promise.allSettled(
       filteredServers.map(async (server) => {
-        const instances = await fetchAllInstances(server.name, server.token);
+        const instances = await fetchAllInstances(
+          server.name,
+          server.token,
+          8000
+        );
         const matches: { server: string; instance: Instance }[] = [];
 
         for (const instance of instances) {
-          const instanceNumber = getInstanceNumber(instance);
-          const instanceName = instance.name || "";
-
-          if (
-            instanceNumber.includes(searchTerm) ||
-            instanceName.includes(searchTerm)
-          ) {
+          if (instanceMatchesSearch(searchTerm, instance)) {
             let safeInstance: Partial<Instance> = instance;
             if (role !== "admin") {
               const { token, paircode, qrcode, id, ...rest } = instance;
