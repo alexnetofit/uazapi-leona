@@ -12,7 +12,13 @@ import LogsPanel from "@/components/LogsPanel";
 // STANDBY: monitor de filas — reativar junto com cron /api/queue-monitor (ver STANDBY.md)
 // import QueuePanel from "@/components/QueuePanel";
 import GroupsPanel from "@/components/GroupsPanel";
-import { DashboardData, ServerDashboard, ServerSnapshot } from "@/lib/types";
+import CompetitorsPanel from "@/components/CompetitorsPanel";
+import {
+  CompetitorsData,
+  DashboardData,
+  ServerDashboard,
+  ServerSnapshot,
+} from "@/lib/types";
 import { UserRole } from "@/lib/auth";
 
 function buildDashboardFromServers(
@@ -67,6 +73,8 @@ function calcSecondsUntilNextPoll(lastPoll: string | null): number {
 
 export default function Home() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [competitors, setCompetitors] = useState<CompetitorsData | null>(null);
+  const [loadingCompetitors, setLoadingCompetitors] = useState(false);
   const [servers, setServers] = useState<{ name: string }[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -155,6 +163,21 @@ export default function Home() {
     }
   }, []);
 
+  const fetchCompetitors = useCallback(async () => {
+    setLoadingCompetitors(true);
+    try {
+      const res = await fetch(`/api/competitors?_=${Date.now()}`, {
+        signal: AbortSignal.timeout(20000),
+        cache: "no-store",
+      });
+      if (res.ok) setCompetitors(await res.json());
+    } catch (error) {
+      console.error("Erro ao buscar concorrentes:", error);
+    } finally {
+      setLoadingCompetitors(false);
+    }
+  }, []);
+
   /* STANDBY: poll em lote via GET /api/poll (usado pelo cron)
   const triggerPoll = useCallback(async () => {
     try {
@@ -220,6 +243,8 @@ export default function Home() {
     loadingRef.current = true;
     setLoading(true);
 
+    void fetchCompetitors();
+
     const serverNames =
       data?.servers?.map((s) => s.serverName) ??
       servers.map((s) => s.name);
@@ -259,10 +284,13 @@ export default function Home() {
     await fetchStatus();
     setLoading(false);
     loadingRef.current = false;
-  }, [fetchStatus, applyServerSnapshot, data, servers]);
+  }, [fetchStatus, applyServerSnapshot, fetchCompetitors, data, servers]);
 
   useEffect(() => {
-    if (userRole) loadData();
+    if (userRole) {
+      loadData();
+      void fetchCompetitors();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userRole]);
 
@@ -495,6 +523,8 @@ export default function Home() {
                 lastPoll={data.lastPoll}
               />
             )}
+
+            <CompetitorsPanel data={competitors} loading={loadingCompetitors} />
 
             {data && data.servers.length > 0 ? (
               <div>

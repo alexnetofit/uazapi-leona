@@ -84,6 +84,27 @@ export interface NotificationLog {
   details?: Record<string, unknown>;
 }
 
+export interface CompetitorServerResult {
+  host: string;
+  connected: number;
+  total: number;
+  error?: boolean;
+}
+
+export interface CompetitorResult {
+  name: string;
+  servers: CompetitorServerResult[];
+  connected: number;
+  total: number;
+  failedServers: number;
+}
+
+export interface CompetitorsData {
+  competitors: CompetitorResult[];
+  totalConnected: number;
+  checkedAt: string;
+}
+
 export interface QueueEntry {
   server: string;
   instanceName: string;
