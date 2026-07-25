@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServers, saveSnapshot, setLastPoll, refreshServerDc, buildUnreachableSnapshot } from "@/lib/kv";
-import { fetchAllInstances, isConnected } from "@/lib/uazapi";
-import { ServerSnapshot } from "@/lib/types";
+import { getServers, saveSnapshot, setLastPoll } from "@/lib/kv";
+import { buildServerSnapshot } from "@/lib/snapshot";
 
 export const maxDuration = 30;
 
@@ -26,45 +25,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let instances;
-    try {
-      instances = await fetchAllInstances(server.name, server.token);
-    } catch {
-      const dc = await refreshServerDc(server.name);
-      const errorSnapshot = buildUnreachableSnapshot(server.name, dc);
-      await saveSnapshot(errorSnapshot);
-      await setLastPoll(errorSnapshot.timestamp);
+    const snapshot = await buildServerSnapshot(server);
 
-      return NextResponse.json({
-        server: server.name,
-        status: "error",
-        snapshot: errorSnapshot,
-      });
-    }
-
-    const totalInstances = instances.length;
-    const connectedInstances = instances.filter(isConnected).length;
-    const now = new Date().toISOString();
-    const dc = await refreshServerDc(server.name);
-
-    const newSnapshot: ServerSnapshot = {
-      serverName: server.name,
-      instances: [],
-      totalInstances,
-      connectedInstances,
-      disconnectedInstances: totalInstances - connectedInstances,
-      timestamp: now,
-      dc,
-      error: false,
-    };
-
-    await saveSnapshot(newSnapshot);
-    await setLastPoll(now);
+    await saveSnapshot(snapshot);
+    await setLastPoll(snapshot.timestamp);
 
     return NextResponse.json({
       server: server.name,
-      status: "ok",
-      snapshot: newSnapshot,
+      status: snapshot.error ? "error" : "ok",
+      snapshot,
     });
   } catch (error) {
     console.error("Erro ao pollar servidor individual:", error);

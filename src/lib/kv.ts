@@ -1,6 +1,5 @@
 import { Redis } from "@upstash/redis";
 import { Server, ServerSnapshot, PreviousCount, NotificationLog, QueueEntry } from "./types";
-import { fetchServerStatus } from "./uazapi";
 
 const SERVERS_KEY = "uazapi:servers";
 const SNAPSHOT_PREFIX = "uazapi:snapshot:";
@@ -254,7 +253,6 @@ export async function clearLogs(): Promise<void> {
 // --- DC Cache ---
 
 const DC_PREFIX = "uazapi:dc:";
-const DC_LAST_FETCH_KEY = "uazapi:dc_last_fetch";
 
 export async function getCachedDc(serverName: string): Promise<string> {
   if (!isRedisConfigured()) return "";
@@ -267,39 +265,6 @@ export async function saveDcCache(serverName: string, dc: string): Promise<void>
   if (!isRedisConfigured()) return;
   const redis = getRedis();
   await redis.set(`${DC_PREFIX}${serverName}`, dc);
-}
-
-/** Busca DC ao vivo em /status e atualiza o cache (fallback no cache se falhar). */
-export async function refreshServerDc(serverName: string): Promise<string> {
-  try {
-    const serverStatus = await fetchServerStatus(serverName);
-    const dc = serverStatus.dc || "";
-    await saveDcCache(serverName, dc);
-    return dc;
-  } catch {
-    return getCachedDc(serverName);
-  }
-}
-
-export async function getDcLastFetch(): Promise<string | null> {
-  if (!isRedisConfigured()) return null;
-  const redis = getRedis();
-  return await redis.get<string>(DC_LAST_FETCH_KEY) || null;
-}
-
-export async function setDcLastFetch(date: string): Promise<void> {
-  if (!isRedisConfigured()) return;
-  const redis = getRedis();
-  await redis.set(DC_LAST_FETCH_KEY, date);
-}
-
-export function shouldFetchDcToday(lastFetch: string | null): boolean {
-  if (!lastFetch) return true;
-  const now = new Date();
-  const brtNow = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-  const lastDate = new Date(lastFetch);
-  const brtLast = new Date(lastDate.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-  return brtNow.toDateString() !== brtLast.toDateString();
 }
 
 // --- STANDBY: funções abaixo usadas pelo queue-monitor (ver STANDBY.md) ---

@@ -1,52 +1,72 @@
 import { Instance } from "./types";
 
+/** Contagens prontas de /status (instance_counts) — dispensa varrer /instance/all. */
+export interface InstanceCounts {
+  total: number;
+  connected: number;
+  disconnected: number;
+}
+
 export interface ServerStatus {
   isHealthy: boolean;
-  connectedInstances: number;
+  /** null em servidores antigos que não expõem instance_counts. */
+  counts: InstanceCounts | null;
   serverStatus: string;
   lastCheck: string;
   dc: string;
 }
 
-export async function fetchServerStatus(
-  serverName: string
+/** /status de um host completo (serve para servidores nossos e de concorrentes). */
+export async function fetchStatusByHost(
+  host: string,
+  timeoutMs = 12000
 ): Promise<ServerStatus> {
-  const url = `https://${serverName}.uazapi.com/status`;
+  const url = `https://${host}/status`;
 
   const response = await fetch(url, {
     method: "GET",
     headers: { Accept: "application/json" },
     cache: "no-store",
+    signal: AbortSignal.timeout(timeoutMs),
   });
 
   if (!response.ok) {
     throw new Error(
-      `Erro ao buscar status do servidor ${serverName}: ${response.status} ${response.statusText}`
+      `Erro ao buscar status de ${host}: ${response.status} ${response.statusText}`
     );
   }
 
   const data = await response.json();
 
-  // Formato 1: servidor com instâncias conectadas
-  // { status: { checked_instance: { is_healthy: true }, total_instances: 146, server_status: "running" } }
+  // instance_counts: { total, connected, disconnected, reconnecting, connecting, ... }
+  const raw = data?.instance_counts;
+  const counts: InstanceCounts | null =
+    raw && typeof raw.total === "number" && typeof raw.connected === "number"
+      ? {
+          total: raw.total,
+          connected: raw.connected,
+          disconnected: raw.disconnected ?? raw.total - raw.connected,
+        }
+      : null;
+
+  // Formato 1: { status: { checked_instance, dc, server_status, ... } }
   if (data?.status && typeof data.status === "object") {
     const status = data.status;
-    const checked = status.checked_instance || {};
     return {
-      isHealthy: checked.is_healthy === true,
-      connectedInstances: status.total_instances ?? 0,
+      isHealthy: status.checked_instance?.is_healthy === true,
+      counts,
       serverStatus: status.server_status || "running",
       lastCheck: status.last_check || new Date().toISOString(),
       dc: status.dc || "",
     };
   }
 
-  // Formato 2: servidor de pé mas sem instâncias conectadas
+  // Formato 2: servidor de pé mas sem nenhuma instância conectada
   // { connected_instances: 0, status: "warning", info: "Server is up but no instances connected" }
   if (data?.status === "warning" || data?.connected_instances !== undefined) {
     return {
       isHealthy: true,
-      connectedInstances: data.connected_instances ?? 0,
+      counts,
       serverStatus: "running",
       lastCheck: new Date().toISOString(),
       dc: data.dc || "",
@@ -55,11 +75,18 @@ export async function fetchServerStatus(
 
   return {
     isHealthy: false,
-    connectedInstances: 0,
+    counts,
     serverStatus: "unknown",
     lastCheck: new Date().toISOString(),
     dc: "",
   };
+}
+
+export function fetchServerStatus(
+  serverName: string,
+  timeoutMs = 12000
+): Promise<ServerStatus> {
+  return fetchStatusByHost(`${serverName}.uazapi.com`, timeoutMs);
 }
 
 export function digitsOnly(value: string): string {

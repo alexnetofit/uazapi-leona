@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServers, getSnapshotsByNames, batchSaveSnapshots, getWebhookUrl, setLastPoll, saveLog, getCachedDc, saveDcCache, getDcLastFetch, setDcLastFetch, shouldFetchDcToday, buildUnreachableSnapshot, CachedInstance } from "@/lib/kv";
-import { fetchServerStatus, fetchAllInstances, isConnected } from "@/lib/uazapi";
+import { getServers, getSnapshotsByNames, batchSaveSnapshots, getWebhookUrl, setLastPoll, saveLog } from "@/lib/kv";
+import { buildServerSnapshot } from "@/lib/snapshot";
 import { sendPushToAll } from "@/lib/push";
 import { ServerSnapshot, WebhookAlert } from "@/lib/types";
 
@@ -40,110 +40,67 @@ export async function GET(request: NextRequest) {
     }
 
     const serverNames = servers.map((s) => s.name);
-    const [snapshotsMap, webhookUrl, dcLastFetch] = await Promise.all([
+    const [snapshotsMap, webhookUrl] = await Promise.all([
       getSnapshotsByNames(serverNames),
       getWebhookUrl(),
-      getDcLastFetch(),
     ]);
 
-    const needDcFetch = shouldFetchDcToday(dcLastFetch);
     const newSnapshots: ServerSnapshot[] = [];
-    const allConnectedInstances: CachedInstance[] = [];
 
     const results = await Promise.all(
       servers.map(async (server) => {
         try {
           const previousSnapshot = snapshotsMap.get(server.name) || null;
+          const snapshot = await buildServerSnapshot(server);
+          newSnapshots.push(snapshot);
 
-          let instances;
-          try {
-            instances = await fetchAllInstances(server.name, server.token);
-          } catch (err) {
-            // Retry once
-            try {
-              await new Promise((r) => setTimeout(r, 3000));
-              instances = await fetchAllInstances(server.name, server.token);
-            } catch (retryErr) {
-              console.error(
-                `Servidor ${server.name} inacessível após 2 tentativas`
-              );
+          if (snapshot.error) {
+            console.error(`Servidor ${server.name} inacessível`);
 
-              await sendPushToAll({
-                title: `Servidor ${server.name} inacessível`,
-                body: `Não foi possível conectar após 2 tentativas.`,
-                tag: `error-${server.name}`,
-              });
+            await sendPushToAll({
+              title: `Servidor ${server.name} inacessível`,
+              body: `Não foi possível conectar após 2 tentativas.`,
+              tag: `error-${server.name}`,
+            });
 
-              if (webhookUrl) {
-                try {
-                  await fetch(webhookUrl, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      server: server.name,
-                      type: "server_error",
-                      message: `Servidor ${server.name} inacessível após 2 tentativas`,
-                      error: retryErr instanceof Error ? retryErr.message : String(retryErr),
-                      timestamp: new Date().toISOString(),
-                      last_known_total: previousSnapshot?.totalInstances ?? null,
-                      last_known_connected: previousSnapshot?.connectedInstances ?? null,
-                    }),
-                  });
-                } catch (webhookError) {
-                  console.error(
-                    `Erro ao enviar webhook de erro para ${server.name}:`,
-                    webhookError
-                  );
-                }
+            if (webhookUrl) {
+              try {
+                await fetch(webhookUrl, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    server: server.name,
+                    type: "server_error",
+                    message: `Servidor ${server.name} inacessível após 2 tentativas`,
+                    timestamp: snapshot.timestamp,
+                    last_known_total: previousSnapshot?.totalInstances ?? null,
+                    last_known_connected: previousSnapshot?.connectedInstances ?? null,
+                  }),
+                });
+              } catch (webhookError) {
+                console.error(
+                  `Erro ao enviar webhook de erro para ${server.name}:`,
+                  webhookError
+                );
               }
-
-              await saveLog({
-                id: `${Date.now()}-${server.name}-error`,
-                type: "server_error",
-                server: server.name,
-                message: `Servidor inacessível após 2 tentativas`,
-                timestamp: new Date().toISOString(),
-                details: {
-                  error: retryErr instanceof Error ? retryErr.message : String(retryErr),
-                  last_known_total: previousSnapshot?.totalInstances ?? null,
-                  last_known_connected: previousSnapshot?.connectedInstances ?? null,
-                },
-              });
-
-              const dc = await getCachedDc(server.name);
-              newSnapshots.push(buildUnreachableSnapshot(server.name, dc));
-
-              return { server: server.name, status: "error" as const, alert: true };
             }
+
+            await saveLog({
+              id: `${Date.now()}-${server.name}-error`,
+              type: "server_error",
+              server: server.name,
+              message: `Servidor inacessível após 2 tentativas`,
+              timestamp: snapshot.timestamp,
+              details: {
+                last_known_total: previousSnapshot?.totalInstances ?? null,
+                last_known_connected: previousSnapshot?.connectedInstances ?? null,
+              },
+            });
+
+            return { server: server.name, status: "error" as const, alert: true };
           }
 
-          const totalInstances = instances.length;
-          const connected = instances.filter(isConnected);
-          const connectedInstances = connected.length;
-          const now = new Date().toISOString();
-
-          for (const inst of connected) {
-            if (inst.token) {
-              allConnectedInstances.push({
-                server: server.name,
-                name: inst.name || "",
-                owner: inst.owner || inst.name || "",
-                token: inst.token,
-              });
-            }
-          }
-
-          let dc = await getCachedDc(server.name);
-          if (needDcFetch) {
-            try {
-              const serverStatus = await fetchServerStatus(server.name);
-              dc = serverStatus.dc || "";
-              await saveDcCache(server.name, dc);
-            } catch {
-              // DC fetch failed, use cached value
-            }
-          }
-
+          const { totalInstances, connectedInstances, timestamp } = snapshot;
           let alertTriggered = false;
 
           if (previousSnapshot) {
@@ -162,7 +119,7 @@ export async function GET(request: NextRequest) {
                   server: server.name,
                   disconnected_count: droppedCount,
                   disconnected_instances: [],
-                  timestamp: now,
+                  timestamp,
                   total_instances: totalInstances,
                   connected_now: connectedInstances,
                 };
@@ -187,7 +144,7 @@ export async function GET(request: NextRequest) {
                 type: "disconnect_alert",
                 server: server.name,
                 message: `${droppedCount} instâncias desconectaram. Conectadas: ${connectedInstances}/${totalInstances}`,
-                timestamp: now,
+                timestamp,
                 details: {
                   disconnected_count: droppedCount,
                   connected_now: connectedInstances,
@@ -196,19 +153,6 @@ export async function GET(request: NextRequest) {
               });
             }
           }
-
-          const newSnapshot: ServerSnapshot = {
-            serverName: server.name,
-            instances: [],
-            totalInstances,
-            connectedInstances,
-            disconnectedInstances: totalInstances - connectedInstances,
-            timestamp: now,
-            dc,
-            error: false,
-          };
-
-          newSnapshots.push(newSnapshot);
 
           return {
             server: server.name,
@@ -220,22 +164,14 @@ export async function GET(request: NextRequest) {
             `Erro ao consultar servidor ${server.name}:`,
             serverError
           );
-          const dc = await getCachedDc(server.name);
-          newSnapshots.push(buildUnreachableSnapshot(server.name, dc));
           return { server: server.name, status: "error" as const };
         }
       })
     );
 
-    if (needDcFetch) {
-      await setDcLastFetch(new Date().toISOString());
-    }
-
     await Promise.all([
       batchSaveSnapshots(newSnapshots, snapshotsMap),
       setLastPoll(new Date().toISOString()),
-      // STANDBY: cache para queue-monitor — reativar com STANDBY.md
-      // saveConnectedInstances(allConnectedInstances),
     ]);
 
     return NextResponse.json({

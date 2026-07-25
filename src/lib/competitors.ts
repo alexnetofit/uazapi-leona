@@ -1,4 +1,5 @@
 import { CompetitorResult, CompetitorServerResult } from "./types";
+import { fetchStatusByHost } from "./uazapi";
 
 interface CompetitorDefinition {
   name: string;
@@ -29,36 +30,14 @@ export const COMPETITORS: CompetitorDefinition[] = [
   },
 ];
 
-interface StatusResponse {
-  instance_counts?: {
-    total?: number;
-    connected?: number;
-  };
-  status?: {
-    total_instances?: number;
-  };
-}
-
-async function fetchServerStatus(
+async function fetchCompetitorServer(
   host: string,
   timeoutMs: number
 ): Promise<CompetitorServerResult> {
   try {
-    const res = await fetch(`https://${host}/status`, {
-      signal: AbortSignal.timeout(timeoutMs),
-      cache: "no-store",
-    });
-
-    if (!res.ok) {
-      return { host, connected: 0, total: 0, error: true };
-    }
-
-    const body = (await res.json()) as StatusResponse;
-    const counts = body.instance_counts;
-    const connected = counts?.connected ?? body.status?.total_instances ?? 0;
-    const total = counts?.total ?? 0;
-
-    return { host, connected, total };
+    const { counts } = await fetchStatusByHost(host, timeoutMs);
+    if (!counts) return { host, connected: 0, total: 0, error: true };
+    return { host, connected: counts.connected, total: counts.total };
   } catch {
     return { host, connected: 0, total: 0, error: true };
   }
@@ -70,7 +49,7 @@ export async function fetchCompetitors(
   return Promise.all(
     COMPETITORS.map(async (competitor) => {
       const servers = await Promise.all(
-        competitor.hosts.map((host) => fetchServerStatus(host, timeoutMs))
+        competitor.hosts.map((host) => fetchCompetitorServer(host, timeoutMs))
       );
 
       const healthy = servers.filter((s) => !s.error);
