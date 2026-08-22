@@ -148,6 +148,12 @@ export interface GrowthData {
   lastSampleAt: string | null;
 }
 
+/** Contagem ao vivo (não entra no histórico de snapshots). */
+export interface GrowthLive {
+  at: string;
+  players: Record<string, GrowthPlayerCounts>;
+}
+
 export interface QueueEntry {
   server: string;
   instanceName: string;

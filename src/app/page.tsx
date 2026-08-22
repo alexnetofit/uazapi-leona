@@ -15,6 +15,7 @@ import GrowthPanel from "@/components/GrowthPanel";
 import {
   DashboardData,
   GrowthData,
+  GrowthLive,
   ServerDashboard,
   ServerSnapshot,
 } from "@/lib/types";
@@ -73,6 +74,7 @@ function calcSecondsUntilNextPoll(lastPoll: string | null): number {
 export default function Home() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [growth, setGrowth] = useState<GrowthData | null>(null);
+  const [growthLive, setGrowthLive] = useState<GrowthLive | null>(null);
   const [loadingGrowth, setLoadingGrowth] = useState(false);
   const [servers, setServers] = useState<{ name: string }[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -177,6 +179,19 @@ export default function Home() {
     }
   }, []);
 
+  /** Contagem atual de Leona/concorrentes — não grava snapshot. */
+  const fetchGrowthLive = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/growth/live?_=${Date.now()}`, {
+        signal: AbortSignal.timeout(45000),
+        cache: "no-store",
+      });
+      if (res.ok) setGrowthLive(await res.json());
+    } catch (error) {
+      console.error("Erro ao buscar contagem atual:", error);
+    }
+  }, []);
+
   /* STANDBY: poll em lote via GET /api/poll (usado pelo cron)
   const triggerPoll = useCallback(async () => {
     try {
@@ -278,15 +293,16 @@ export default function Home() {
     }
 
     // Sincroniza totais e "anterior" vindos do Redis (sem cache CDN)
-    await Promise.all([fetchStatus(), fetchGrowth()]);
+    await Promise.all([fetchStatus(), fetchGrowth(), fetchGrowthLive()]);
     setLoading(false);
     loadingRef.current = false;
-  }, [fetchStatus, fetchGrowth, applyServerSnapshot, data, servers]);
+  }, [fetchStatus, fetchGrowth, fetchGrowthLive, applyServerSnapshot, data, servers]);
 
   useEffect(() => {
     if (userRole) {
       loadData();
       void fetchGrowth();
+      void fetchGrowthLive();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userRole]);
@@ -505,6 +521,7 @@ export default function Home() {
           <>
             <GrowthPanel
               data={growth}
+              live={growthLive}
               loading={loadingGrowth}
             />
 

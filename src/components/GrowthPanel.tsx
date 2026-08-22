@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { GrowthData, GrowthSeriesPoint } from "@/lib/types";
+import { GrowthData, GrowthLive, GrowthSeriesPoint } from "@/lib/types";
 
 type Metric = "connected" | "total";
 
@@ -141,32 +141,68 @@ function Sparkline({
 
 interface GrowthPanelProps {
   data: GrowthData | null;
+  live?: GrowthLive | null;
   loading?: boolean;
+}
+
+function formatLiveTime(at: string | undefined) {
+  if (!at) return null;
+  return new Date(at).toLocaleTimeString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export default function GrowthPanel({
   data,
+  live,
   loading,
 }: GrowthPanelProps) {
   const [metric, setMetric] = useState<Metric>("connected");
   const days = data?.days ?? [];
   const latest = days.at(-1);
   const lastHour = lastHourLabel(latest?.hours);
+  const liveTime = formatLiveTime(live?.at);
 
+  /**
+   * Cards do topo = contagem ATUAL (ao vivo).
+   * O delta continua comparando com a média do último dia fechado.
+   * Sem dado ao vivo, cai para o último ponto da série.
+   */
   const latestCards = useMemo(() => {
     if (!data || !latest) return [];
     return (data.players.length ? data.players : [...PLAYERS]).map((name) => {
       const point = data.series[name]?.at(-1);
+      const liveCounts = live?.players?.[name];
+      const liveValue = liveCounts
+        ? metric === "connected"
+          ? liveCounts.connected
+          : liveCounts.total
+        : null;
+      const value = liveValue ?? point?.[metric] ?? null;
+
+      const previous =
+        metric === "connected"
+          ? point?.connected ?? null
+          : point?.total ?? null;
+      const seriesDelta =
+        metric === "connected"
+          ? point?.connectedDelta ?? null
+          : point?.totalDelta ?? null;
+
       return {
         name,
-        value: point?.[metric] ?? null,
+        value,
+        // com valor ao vivo, o delta é contra a média do dia; senão mantém o da série
         delta:
-          metric === "connected"
-            ? point?.connectedDelta ?? null
-            : point?.totalDelta ?? null,
+          liveValue != null && previous != null
+            ? liveValue - previous
+            : seriesDelta,
+        isLive: liveValue != null,
       };
     });
-  }, [data, latest, metric]);
+  }, [data, latest, live, metric]);
 
   return (
     <section className="mb-14">
@@ -176,8 +212,10 @@ export default function GrowthPanel({
             Instâncias
           </h2>
           <p className="text-[15px] text-[#9d9dad] mt-1.5 max-w-xl leading-snug">
-            Média do dia · 9 snaps (08h às 00h)
-            {lastHour ? ` · último ${lastHour}` : ""}
+            {liveTime
+              ? `Agora ${liveTime} · série: média do dia`
+              : "Média do dia · 9 snaps (08h às 00h)"}
+            {lastHour ? ` · último snap ${lastHour}` : ""}
           </p>
         </div>
         <div className="flex items-center gap-3 shrink-0">
@@ -225,7 +263,9 @@ export default function GrowthPanel({
                 </p>
                 <p className="mt-2 text-[13px]">
                   <Delta value={card.delta} />
-                  <span className="text-[#6a6a7c]"> vs ontem</span>
+                  <span className="text-[#6a6a7c]">
+                    {card.isLive ? " vs média do dia" : " vs ontem"}
+                  </span>
                 </p>
               </div>
             ))}
