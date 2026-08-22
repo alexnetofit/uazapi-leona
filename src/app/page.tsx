@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import TotalSummary from "@/components/TotalSummary";
 import ServerCard from "@/components/ServerCard";
 import AddServerModal from "@/components/AddServerModal";
 import SearchBar from "@/components/SearchBar";
@@ -12,10 +11,8 @@ import LogsPanel from "@/components/LogsPanel";
 // STANDBY: monitor de filas — reativar junto com cron /api/queue-monitor (ver STANDBY.md)
 // import QueuePanel from "@/components/QueuePanel";
 import GroupsPanel from "@/components/GroupsPanel";
-import CompetitorsPanel from "@/components/CompetitorsPanel";
 import GrowthPanel from "@/components/GrowthPanel";
 import {
-  CompetitorsData,
   DashboardData,
   GrowthData,
   ServerDashboard,
@@ -75,8 +72,6 @@ function calcSecondsUntilNextPoll(lastPoll: string | null): number {
 
 export default function Home() {
   const [data, setData] = useState<DashboardData | null>(null);
-  const [competitors, setCompetitors] = useState<CompetitorsData | null>(null);
-  const [loadingCompetitors, setLoadingCompetitors] = useState(false);
   const [growth, setGrowth] = useState<GrowthData | null>(null);
   const [loadingGrowth, setLoadingGrowth] = useState(false);
   const [samplingGrowth, setSamplingGrowth] = useState(false);
@@ -165,21 +160,6 @@ export default function Home() {
       }
     } catch (error) {
       console.error("Erro ao buscar servidores:", error);
-    }
-  }, []);
-
-  const fetchCompetitors = useCallback(async () => {
-    setLoadingCompetitors(true);
-    try {
-      const res = await fetch(`/api/competitors?_=${Date.now()}`, {
-        signal: AbortSignal.timeout(20000),
-        cache: "no-store",
-      });
-      if (res.ok) setCompetitors(await res.json());
-    } catch (error) {
-      console.error("Erro ao buscar concorrentes:", error);
-    } finally {
-      setLoadingCompetitors(false);
     }
   }, []);
 
@@ -282,8 +262,6 @@ export default function Home() {
     loadingRef.current = true;
     setLoading(true);
 
-    void fetchCompetitors();
-
     const serverNames =
       data?.servers?.map((s) => s.serverName) ??
       servers.map((s) => s.name);
@@ -323,12 +301,11 @@ export default function Home() {
     await fetchStatus();
     setLoading(false);
     loadingRef.current = false;
-  }, [fetchStatus, applyServerSnapshot, fetchCompetitors, data, servers]);
+  }, [fetchStatus, applyServerSnapshot, data, servers]);
 
   useEffect(() => {
     if (userRole) {
       loadData();
-      void fetchCompetitors();
       void fetchGrowth();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -555,15 +532,6 @@ export default function Home() {
           <>
             <SearchBar userRole={userRole} />
 
-            {data && (
-              <TotalSummary
-                totalInstances={data.totalInstances}
-                totalConnected={data.totalConnected}
-                totalDisconnected={data.totalDisconnected}
-                lastPoll={data.lastPoll}
-              />
-            )}
-
             <GrowthPanel
               data={growth}
               loading={loadingGrowth}
@@ -571,8 +539,6 @@ export default function Home() {
               isAdmin={isAdmin}
               onSample={isAdmin ? sampleGrowth : undefined}
             />
-
-            <CompetitorsPanel data={competitors} loading={loadingCompetitors} />
 
             {data && data.servers.length > 0 ? (
               <div>
