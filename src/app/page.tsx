@@ -74,7 +74,6 @@ export default function Home() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [growth, setGrowth] = useState<GrowthData | null>(null);
   const [loadingGrowth, setLoadingGrowth] = useState(false);
-  const [samplingGrowth, setSamplingGrowth] = useState(false);
   const [servers, setServers] = useState<{ name: string }[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -178,25 +177,6 @@ export default function Home() {
     }
   }, []);
 
-  const sampleGrowth = useCallback(async () => {
-    if (samplingGrowth) return;
-    setSamplingGrowth(true);
-    try {
-      const res = await fetch("/api/growth", {
-        method: "POST",
-        cache: "no-store",
-        signal: AbortSignal.timeout(25000),
-      });
-      const body = await res.json();
-      if (res.ok && body.data) setGrowth(body.data);
-      else await fetchGrowth();
-    } catch (error) {
-      console.error("Erro ao gravar amostra de crescimento:", error);
-    } finally {
-      setSamplingGrowth(false);
-    }
-  }, [samplingGrowth, fetchGrowth]);
-
   /* STANDBY: poll em lote via GET /api/poll (usado pelo cron)
   const triggerPoll = useCallback(async () => {
     try {
@@ -261,7 +241,6 @@ export default function Home() {
     if (loadingRef.current) return;
     loadingRef.current = true;
     setLoading(true);
-    void sampleGrowth();
 
     const serverNames =
       data?.servers?.map((s) => s.serverName) ??
@@ -299,10 +278,10 @@ export default function Home() {
     }
 
     // Sincroniza totais e "anterior" vindos do Redis (sem cache CDN)
-    await fetchStatus();
+    await Promise.all([fetchStatus(), fetchGrowth()]);
     setLoading(false);
     loadingRef.current = false;
-  }, [fetchStatus, applyServerSnapshot, data, servers, sampleGrowth]);
+  }, [fetchStatus, fetchGrowth, applyServerSnapshot, data, servers]);
 
   useEffect(() => {
     if (userRole) {
@@ -526,7 +505,7 @@ export default function Home() {
           <>
             <GrowthPanel
               data={growth}
-              loading={loadingGrowth || samplingGrowth}
+              loading={loadingGrowth}
             />
 
             <SearchBar userRole={userRole} />
