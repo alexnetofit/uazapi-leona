@@ -47,6 +47,10 @@ export function slotForHour(hour: number): GrowthSlot {
   return "morning";
 }
 
+export function sortSampleHours(hours: number[]): number[] {
+  return [...new Set(hours)].sort((a, b) => (a === 0 ? 24 : a) - (b === 0 ? 24 : b));
+}
+
 function mean(values: number[]): number {
   if (values.length === 0) return 0;
   return Math.round(values.reduce((sum, n) => sum + n, 0) / values.length);
@@ -65,7 +69,12 @@ export function averageSamples(day: string, samples: GrowthSample[]): GrowthDay 
       total: mean(vals.map((p) => p.total)),
     };
   }
-  return { day, sampleCount: samples.length, players };
+  return {
+    day,
+    sampleCount: samples.length,
+    hours: sortSampleHours(samples.map((s) => s.hour)),
+    players,
+  };
 }
 
 async function countsFromHost(
@@ -163,15 +172,21 @@ export async function readGrowthData(): Promise<GrowthData> {
   const days = await getGrowthDays();
   const today = brtParts().day;
   const todaySamples = await getGrowthSamples(today);
+  const todayHours = sortSampleHours(todaySamples.map((s) => s.hour));
+  const hydrated = days.map((d) =>
+    d.day === today
+      ? { ...d, hours: todayHours, sampleCount: todaySamples.length || d.sampleCount }
+      : d
+  );
   const lastSampleAt =
     todaySamples.at(-1)?.at ??
-    days.at(-1)?.day ??
+    hydrated.at(-1)?.day ??
     null;
 
   return {
     players: [...GROWTH_PLAYERS],
-    days,
-    series: buildSeries(days),
+    days: hydrated,
+    series: buildSeries(hydrated),
     lastSampleAt,
   };
 }

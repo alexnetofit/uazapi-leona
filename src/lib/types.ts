@@ -128,6 +128,7 @@ export interface GrowthDayPlayer {
 export interface GrowthDay {
   day: string;
   sampleCount: number;
+  hours?: number[];
   players: Record<string, GrowthDayPlayer>;
 }
 

@@ -24,16 +24,11 @@ function formatNumber(value: number | null) {
   return value.toLocaleString("pt-BR");
 }
 
-function formatStamp(iso: string | null) {
-  if (!iso) return null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return formatDay(iso);
-  return new Date(iso).toLocaleString("pt-BR", {
-    timeZone: "America/Sao_Paulo",
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+function lastHourLabel(hours: number[] | undefined) {
+  if (!hours?.length) return null;
+  const ordered = [...hours].sort((a, b) => (a === 0 ? 24 : a) - (b === 0 ? 24 : b));
+  const hour = ordered.at(-1)!;
+  return `${String(hour).padStart(2, "0")}h`;
 }
 
 function Delta({ value }: { value: number | null }) {
@@ -156,7 +151,7 @@ export default function GrowthPanel({
   const [metric, setMetric] = useState<Metric>("connected");
   const days = data?.days ?? [];
   const latest = days.at(-1);
-  const stamp = formatStamp(data?.lastSampleAt ?? null);
+  const lastHour = lastHourLabel(latest?.hours);
 
   const latestCards = useMemo(() => {
     if (!data || !latest) return [];
@@ -181,9 +176,8 @@ export default function GrowthPanel({
             Instâncias
           </h2>
           <p className="text-[15px] text-[#9d9dad] mt-1.5 max-w-xl leading-snug">
-            Média do dia · 9 amostras (manhã, tarde e noite)
-            {latest ? ` · ${latest.sampleCount}/9 hoje` : ""}
-            {stamp ? ` · ${stamp}` : ""}
+            Média do dia · 9 snaps (08h às 00h)
+            {lastHour ? ` · último ${lastHour}` : ""}
           </p>
         </div>
         <div className="flex items-center gap-3 shrink-0">
@@ -264,9 +258,6 @@ export default function GrowthPanel({
                   <tr key={day.day} className="border-t border-white/[0.06]">
                     <td className="px-5 sm:px-6 py-3.5 text-[15px] text-[#f4f4f7]">
                       {formatDay(day.day)}
-                      <span className="block text-[12px] text-[#6a6a7c]">
-                        {day.sampleCount}/9
-                      </span>
                     </td>
                     {(data.players.length ? data.players : [...PLAYERS]).map((name) => {
                       const point = data.series[name]?.find((p) => p.day === day.day);
