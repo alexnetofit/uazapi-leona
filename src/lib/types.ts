@@ -105,6 +105,48 @@ export interface CompetitorsData {
   checkedAt: string;
 }
 
+export type GrowthSlot = "morning" | "afternoon" | "night";
+
+export interface GrowthPlayerCounts {
+  connected: number;
+  total: number;
+  failedServers: number;
+}
+
+export interface GrowthSample {
+  at: string;
+  slot: GrowthSlot;
+  hour: number;
+  players: Record<string, GrowthPlayerCounts>;
+}
+
+export interface GrowthDayPlayer {
+  connected: number;
+  total: number;
+}
+
+export interface GrowthDay {
+  day: string;
+  sampleCount: number;
+  players: Record<string, GrowthDayPlayer>;
+}
+
+export interface GrowthSeriesPoint {
+  day: string;
+  sampleCount: number;
+  connected: number | null;
+  total: number | null;
+  connectedDelta: number | null;
+  totalDelta: number | null;
+}
+
+export interface GrowthData {
+  players: string[];
+  days: GrowthDay[];
+  series: Record<string, GrowthSeriesPoint[]>;
+  lastSampleAt: string | null;
+}
+
 export interface QueueEntry {
   server: string;
   instanceName: string;

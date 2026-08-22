@@ -1,5 +1,13 @@
 import { Redis } from "@upstash/redis";
-import { Server, ServerSnapshot, PreviousCount, NotificationLog, QueueEntry } from "./types";
+import {
+  Server,
+  ServerSnapshot,
+  PreviousCount,
+  NotificationLog,
+  QueueEntry,
+  GrowthSample,
+  GrowthDay,
+} from "./types";
 
 const SERVERS_KEY = "uazapi:servers";
 const SNAPSHOT_PREFIX = "uazapi:snapshot:";
@@ -395,4 +403,44 @@ export async function removePushSubscription(endpoint: string): Promise<void> {
   const subs = await getPushSubscriptions();
   const filtered = subs.filter((s) => s.endpoint !== endpoint);
   await redis.set(PUSH_SUBS_KEY, filtered);
+}
+
+// --- Crescimento diário (Leona vs concorrentes) ---
+
+const GROWTH_SAMPLES_PREFIX = "uazapi:growth:samples:";
+const GROWTH_DAYS_KEY = "uazapi:growth:days";
+const MAX_GROWTH_DAYS = 90;
+
+export async function getGrowthSamples(day: string): Promise<GrowthSample[]> {
+  if (!isRedisConfigured()) return [];
+  const redis = getRedis();
+  const data = await redis.get<GrowthSample[]>(`${GROWTH_SAMPLES_PREFIX}${day}`);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function saveGrowthSamples(
+  day: string,
+  samples: GrowthSample[]
+): Promise<void> {
+  if (!isRedisConfigured()) return;
+  const redis = getRedis();
+  await redis.set(`${GROWTH_SAMPLES_PREFIX}${day}`, samples);
+}
+
+export async function getGrowthDays(): Promise<GrowthDay[]> {
+  if (!isRedisConfigured()) return [];
+  const redis = getRedis();
+  const data = await redis.get<GrowthDay[]>(GROWTH_DAYS_KEY);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function upsertGrowthDay(dayAvg: GrowthDay): Promise<GrowthDay[]> {
+  if (!isRedisConfigured()) return [dayAvg];
+  const redis = getRedis();
+  const days = (await getGrowthDays()).filter((d) => d.day !== dayAvg.day);
+  days.push(dayAvg);
+  days.sort((a, b) => a.day.localeCompare(b.day));
+  const trimmed = days.slice(-MAX_GROWTH_DAYS);
+  await redis.set(GROWTH_DAYS_KEY, trimmed);
+  return trimmed;
 }

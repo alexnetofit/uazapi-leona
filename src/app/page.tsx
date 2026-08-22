@@ -13,9 +13,11 @@ import LogsPanel from "@/components/LogsPanel";
 // import QueuePanel from "@/components/QueuePanel";
 import GroupsPanel from "@/components/GroupsPanel";
 import CompetitorsPanel from "@/components/CompetitorsPanel";
+import GrowthPanel from "@/components/GrowthPanel";
 import {
   CompetitorsData,
   DashboardData,
+  GrowthData,
   ServerDashboard,
   ServerSnapshot,
 } from "@/lib/types";
@@ -75,6 +77,9 @@ export default function Home() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [competitors, setCompetitors] = useState<CompetitorsData | null>(null);
   const [loadingCompetitors, setLoadingCompetitors] = useState(false);
+  const [growth, setGrowth] = useState<GrowthData | null>(null);
+  const [loadingGrowth, setLoadingGrowth] = useState(false);
+  const [samplingGrowth, setSamplingGrowth] = useState(false);
   const [servers, setServers] = useState<{ name: string }[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -177,6 +182,39 @@ export default function Home() {
       setLoadingCompetitors(false);
     }
   }, []);
+
+  const fetchGrowth = useCallback(async () => {
+    setLoadingGrowth(true);
+    try {
+      const res = await fetch(`/api/growth?_=${Date.now()}`, {
+        signal: AbortSignal.timeout(15000),
+        cache: "no-store",
+      });
+      if (res.ok) setGrowth(await res.json());
+    } catch (error) {
+      console.error("Erro ao buscar crescimento:", error);
+    } finally {
+      setLoadingGrowth(false);
+    }
+  }, []);
+
+  const sampleGrowth = useCallback(async () => {
+    if (samplingGrowth) return;
+    setSamplingGrowth(true);
+    try {
+      const res = await fetch("/api/growth", {
+        method: "POST",
+        cache: "no-store",
+      });
+      const body = await res.json();
+      if (res.ok && body.data) setGrowth(body.data);
+      else await fetchGrowth();
+    } catch (error) {
+      console.error("Erro ao gravar amostra de crescimento:", error);
+    } finally {
+      setSamplingGrowth(false);
+    }
+  }, [samplingGrowth, fetchGrowth]);
 
   /* STANDBY: poll em lote via GET /api/poll (usado pelo cron)
   const triggerPoll = useCallback(async () => {
@@ -290,6 +328,7 @@ export default function Home() {
     if (userRole) {
       loadData();
       void fetchCompetitors();
+      void fetchGrowth();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userRole]);
@@ -523,6 +562,14 @@ export default function Home() {
                 lastPoll={data.lastPoll}
               />
             )}
+
+            <GrowthPanel
+              data={growth}
+              loading={loadingGrowth}
+              sampling={samplingGrowth}
+              isAdmin={isAdmin}
+              onSample={isAdmin ? sampleGrowth : undefined}
+            />
 
             <CompetitorsPanel data={competitors} loading={loadingCompetitors} />
 
