@@ -371,7 +371,7 @@ export default function Home() {
 
   if (!userRole) {
     return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+      <div className="min-h-screen bg-[#08080b] flex items-center justify-center">
         <svg
           className="animate-spin h-8 w-8 text-blue-600"
           viewBox="0 0 24 24"
@@ -396,24 +396,17 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950">
-      <header className="bg-zinc-900 border-b border-zinc-800 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2.5 sm:py-4">
+    <div className="min-h-screen bg-[#08080b]">
+      <header className="border-b border-white/[0.06] sticky top-0 z-30 bg-[#08080b]/90 backdrop-blur">
+        <div className="max-w-6xl mx-auto px-5 sm:px-6 py-4">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 shrink-0">
-              <div className="w-7 h-7 sm:w-8 sm:h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                  <path d="M8 21h8" /><path d="M12 17v4" />
-                </svg>
-              </div>
-              <div className="hidden sm:block">
-                <h1 className="text-lg font-bold text-zinc-100 leading-tight">Gestão UAZAPI</h1>
-                <p className="text-xs text-zinc-400">Monitoramento de instâncias</p>
-              </div>
+            <div className="shrink-0">
+              <h1 className="text-[15px] font-semibold tracking-[-0.02em] text-[#f4f4f7]">
+                UAZAPI
+              </h1>
             </div>
 
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-1 sm:gap-1.5">
               {/* STANDBY: countdown auto-refresh
               <div className="flex items-center gap-1.5 text-xs sm:text-xs text-zinc-400 bg-zinc-800 px-2.5 sm:px-3 py-2 rounded-lg">
                 ...
@@ -424,7 +417,7 @@ export default function Home() {
                 <button
                   onClick={manualPoll}
                   disabled={loading}
-                  className="p-2 sm:px-3 sm:py-2 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:bg-zinc-700 disabled:opacity-50 transition-colors"
+                  className="p-2 sm:px-3 sm:py-1.5 rounded-full text-[13px] text-[#9d9dad] hover:text-[#f4f4f7] disabled:opacity-50 transition-colors"
                   title="Atualizar agora"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="sm:hidden">
@@ -438,7 +431,7 @@ export default function Home() {
               {isAdmin && (
                 <button
                   onClick={() => setShowGroups(true)}
-                  className="p-2 sm:px-3 sm:py-2 rounded-lg text-xs bg-zinc-800 text-green-400 hover:bg-zinc-700 transition-colors"
+                  className="p-2 rounded-full text-[#9d9dad] hover:text-[#f4f4f7] transition-colors"
                   title="Envio para Grupos"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -462,7 +455,7 @@ export default function Home() {
 
               <button
                 onClick={() => setShowLogs(true)}
-                className="p-2 sm:px-3 sm:py-2 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:bg-zinc-700 transition-colors"
+                className="p-2 rounded-full text-[#9d9dad] hover:text-[#f4f4f7] transition-colors"
                 title="Logs de notificações"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -477,7 +470,7 @@ export default function Home() {
               {isAdmin && (
                 <button
                   onClick={() => setShowAddModal(true)}
-                  className="p-2 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl bg-blue-600 text-white text-xs sm:text-sm font-medium hover:bg-blue-700 transition-colors"
+                  className="p-2 sm:px-3.5 sm:py-1.5 rounded-full text-[13px] font-medium bg-[#f4f4f7] text-[#08080b] hover:bg-white transition-colors"
                   title="Adicionar servidor"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="sm:hidden">
@@ -489,7 +482,7 @@ export default function Home() {
 
               <button
                 onClick={handleLogout}
-                className="p-2 sm:px-3 sm:py-2 rounded-lg text-xs bg-zinc-800 text-zinc-400 hover:text-red-400 hover:bg-zinc-700 transition-colors"
+                className="p-2 rounded-full text-[#9d9dad] hover:text-[#ff6b7a] transition-colors"
                 title="Sair"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -502,7 +495,7 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6">
+      <main className="max-w-6xl mx-auto px-5 sm:px-6 pt-8 sm:pt-10 pb-16">
         {loading && !data ? (
           <div className="flex items-center justify-center py-20">
             <div className="flex flex-col items-center gap-3">
@@ -530,8 +523,6 @@ export default function Home() {
           </div>
         ) : (
           <>
-            <SearchBar userRole={userRole} />
-
             <GrowthPanel
               data={growth}
               loading={loadingGrowth}
@@ -540,10 +531,12 @@ export default function Home() {
               onSample={isAdmin ? sampleGrowth : undefined}
             />
 
+            <SearchBar userRole={userRole} />
+
             {data && data.servers.length > 0 ? (
               <div>
-                <h2 className="text-base sm:text-lg font-semibold text-zinc-100 mb-3 sm:mb-4">
-                  Servidores ({data.servers.length})
+                <h2 className="text-[13px] text-[#6a6a7c] mb-4 tracking-[-0.01em]">
+                  Servidores · {data.servers.length}
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   {data.servers.map((server) => (
