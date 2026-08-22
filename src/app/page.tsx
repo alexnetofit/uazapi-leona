@@ -205,6 +205,7 @@ export default function Home() {
       const res = await fetch("/api/growth", {
         method: "POST",
         cache: "no-store",
+        signal: AbortSignal.timeout(20000),
       });
       const body = await res.json();
       if (res.ok && body.data) setGrowth(body.data);

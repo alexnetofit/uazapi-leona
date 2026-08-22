@@ -1,4 +1,4 @@
-import { COMPETITORS, fetchCompetitors } from "./competitors";
+import { COMPETITORS } from "./competitors";
 import {
   getGrowthDays,
   getGrowthSamples,
@@ -6,7 +6,7 @@ import {
   saveGrowthSamples,
   upsertGrowthDay,
 } from "./kv";
-import { buildServerSnapshot } from "./snapshot";
+import { fetchStatusByHost } from "./uazapi";
 import {
   GrowthData,
   GrowthDay,
@@ -15,6 +15,8 @@ import {
   GrowthSeriesPoint,
   GrowthSlot,
 } from "./types";
+
+const STATUS_TIMEOUT_MS = 3000;
 
 export const GROWTH_PLAYERS = [
   "Leona",
@@ -64,43 +66,50 @@ export function averageSamples(day: string, samples: GrowthSample[]): GrowthDay 
   return { day, sampleCount: samples.length, players };
 }
 
-async function collectLeona(): Promise<GrowthPlayerCounts | null> {
-  const servers = await getServers();
-  if (servers.length === 0) return null;
+async function countsFromHost(
+  host: string
+): Promise<{ connected: number; total: number } | null> {
+  try {
+    const { counts } = await fetchStatusByHost(host, STATUS_TIMEOUT_MS);
+    if (!counts) return null;
+    return { connected: counts.connected, total: counts.total };
+  } catch {
+    return null;
+  }
+}
 
-  const snapshots = await Promise.all(
-    servers.map((server) => buildServerSnapshot(server))
+async function collectPlayer(
+  hosts: string[]
+): Promise<GrowthPlayerCounts | null> {
+  const results = await Promise.all(hosts.map(countsFromHost));
+  const healthy = results.filter(
+    (r): r is { connected: number; total: number } => r !== null
   );
-  const healthy = snapshots.filter((s) => !s.error);
   if (healthy.length === 0) return null;
-
   return {
-    connected: healthy.reduce((sum, s) => sum + s.connectedInstances, 0),
-    total: healthy.reduce((sum, s) => sum + s.totalInstances, 0),
-    failedServers: snapshots.length - healthy.length,
+    connected: healthy.reduce((sum, r) => sum + r.connected, 0),
+    total: healthy.reduce((sum, r) => sum + r.total, 0),
+    failedServers: results.length - healthy.length,
   };
 }
 
 export async function collectGrowthSample(): Promise<GrowthSample> {
   const now = new Date();
   const { hour } = brtParts(now);
-  const [leona, competitors] = await Promise.all([
-    collectLeona(),
-    fetchCompetitors(),
+  const leonaServers = await getServers();
+  const leonaHosts = leonaServers.map((s) => `${s.name}.uazapi.com`);
+
+  const [leona, ...competitorCounts] = await Promise.all([
+    collectPlayer(leonaHosts),
+    ...COMPETITORS.map((c) => collectPlayer(c.hosts)),
   ]);
 
   const players: Record<string, GrowthPlayerCounts> = {};
   if (leona) players.Leona = leona;
-
-  for (const competitor of competitors) {
-    const healthy = competitor.servers.length - competitor.failedServers;
-    if (healthy <= 0) continue;
-    players[competitor.name] = {
-      connected: competitor.connected,
-      total: competitor.total,
-      failedServers: competitor.failedServers,
-    };
-  }
+  COMPETITORS.forEach((competitor, index) => {
+    const counts = competitorCounts[index];
+    if (counts) players[competitor.name] = counts;
+  });
 
   return {
     at: now.toISOString(),
