@@ -17,6 +17,8 @@ import {
 } from "./types";
 
 const STATUS_TIMEOUT_MS = 3000;
+const STATUS_RETRIES = 3;
+const STATUS_RETRY_WAIT_MS = 400;
 
 export const GROWTH_PLAYERS = [
   "Leona",
@@ -69,13 +71,18 @@ export function averageSamples(day: string, samples: GrowthSample[]): GrowthDay 
 async function countsFromHost(
   host: string
 ): Promise<{ connected: number; total: number } | null> {
-  try {
-    const { counts } = await fetchStatusByHost(host, STATUS_TIMEOUT_MS);
-    if (!counts) return null;
-    return { connected: counts.connected, total: counts.total };
-  } catch {
-    return null;
+  for (let attempt = 1; attempt <= STATUS_RETRIES; attempt++) {
+    try {
+      const { counts } = await fetchStatusByHost(host, STATUS_TIMEOUT_MS);
+      if (counts) return { connected: counts.connected, total: counts.total };
+    } catch {
+      // tenta de novo — host lento ou instável
+    }
+    if (attempt < STATUS_RETRIES) {
+      await new Promise((r) => setTimeout(r, STATUS_RETRY_WAIT_MS));
+    }
   }
+  return null;
 }
 
 async function collectPlayer(

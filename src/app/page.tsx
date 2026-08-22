@@ -185,7 +185,7 @@ export default function Home() {
       const res = await fetch("/api/growth", {
         method: "POST",
         cache: "no-store",
-        signal: AbortSignal.timeout(20000),
+        signal: AbortSignal.timeout(25000),
       });
       const body = await res.json();
       if (res.ok && body.data) setGrowth(body.data);
@@ -261,6 +261,7 @@ export default function Home() {
     if (loadingRef.current) return;
     loadingRef.current = true;
     setLoading(true);
+    void sampleGrowth();
 
     const serverNames =
       data?.servers?.map((s) => s.serverName) ??
@@ -301,7 +302,7 @@ export default function Home() {
     await fetchStatus();
     setLoading(false);
     loadingRef.current = false;
-  }, [fetchStatus, applyServerSnapshot, data, servers]);
+  }, [fetchStatus, applyServerSnapshot, data, servers, sampleGrowth]);
 
   useEffect(() => {
     if (userRole) {
@@ -525,10 +526,7 @@ export default function Home() {
           <>
             <GrowthPanel
               data={growth}
-              loading={loadingGrowth}
-              sampling={samplingGrowth}
-              isAdmin={isAdmin}
-              onSample={isAdmin ? sampleGrowth : undefined}
+              loading={loadingGrowth || samplingGrowth}
             />
 
             <SearchBar userRole={userRole} />

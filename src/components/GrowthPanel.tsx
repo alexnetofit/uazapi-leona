@@ -147,17 +147,11 @@ function Sparkline({
 interface GrowthPanelProps {
   data: GrowthData | null;
   loading?: boolean;
-  sampling?: boolean;
-  isAdmin?: boolean;
-  onSample?: () => void;
 }
 
 export default function GrowthPanel({
   data,
   loading,
-  sampling,
-  isAdmin,
-  onSample,
 }: GrowthPanelProps) {
   const [metric, setMetric] = useState<Metric>("connected");
   const days = data?.days ?? [];
@@ -208,15 +202,6 @@ export default function GrowthPanel({
               </button>
             ))}
           </div>
-          {isAdmin && onSample && (
-            <button
-              onClick={onSample}
-              disabled={sampling}
-              className="text-[13px] text-[#9d9dad] hover:text-[#f4f4f7] disabled:opacity-50"
-            >
-              {sampling ? "Coletando…" : "Amostrar"}
-            </button>
-          )}
           {loading && (
             <span className="w-3.5 h-3.5 rounded-full border border-[#6a6a7c] border-t-[#f4f4f7] animate-spin" />
           )}
@@ -225,8 +210,7 @@ export default function GrowthPanel({
 
       {!data || days.length === 0 ? (
         <div className="rounded-2xl bg-[#101016] border border-white/[0.06] px-5 py-10 text-[15px] text-[#9d9dad]">
-          Sem série ainda. O cron coleta às 08, 10, 12, 14, 16, 18, 20, 22 e 00
-          {isAdmin ? ", ou use Amostrar." : "."}
+          Sem série ainda. O cron coleta às 08, 10, 12, 14, 16, 18, 20, 22 e 00.
         </div>
       ) : (
         <>
