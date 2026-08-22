@@ -374,7 +374,7 @@ export default function Home() {
     return (
       <div className="min-h-screen bg-[#08080b] flex items-center justify-center">
         <svg
-          className="animate-spin h-8 w-8 text-blue-600"
+          className="animate-spin h-8 w-8 text-[#6ea8ff]"
           viewBox="0 0 24 24"
           fill="none"
         >
@@ -501,7 +501,7 @@ export default function Home() {
           <div className="flex items-center justify-center py-20">
             <div className="flex flex-col items-center gap-3">
               <svg
-                className="animate-spin h-8 w-8 text-blue-600"
+                className="animate-spin h-8 w-8 text-[#6ea8ff]"
                 viewBox="0 0 24 24"
                 fill="none"
               >
@@ -519,7 +519,7 @@ export default function Home() {
                   className="opacity-75"
                 />
               </svg>
-              <p className="text-zinc-400 text-sm">Carregando dados...</p>
+              <p className="text-[#9d9dad] text-[15px]">Carregando dados...</p>
             </div>
           </div>
         ) : (
@@ -532,11 +532,19 @@ export default function Home() {
             <SearchBar userRole={userRole} />
 
             {data && data.servers.length > 0 ? (
-              <div>
-                <h2 className="text-[13px] text-[#6a6a7c] mb-4 tracking-[-0.01em]">
-                  Servidores · {data.servers.length}
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              <section>
+                <div className="mb-6">
+                  <h2 className="text-[28px] sm:text-[32px] font-semibold tracking-[-0.03em] text-[#f4f4f7] leading-tight">
+                    Servidores
+                  </h2>
+                  <p className="text-[15px] text-[#9d9dad] mt-1.5">
+                    {data.servers.length} no painel
+                    {data.totalConnected != null
+                      ? ` · ${data.totalConnected.toLocaleString("pt-BR")} conectadas`
+                      : ""}
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {data.servers.map((server) => (
                     <ServerCard
                       key={server.serverName}
@@ -554,50 +562,29 @@ export default function Home() {
                     />
                   ))}
                 </div>
-              </div>
+              </section>
             ) : servers.length === 0 ? (
-              <div className="text-center py-16 sm:py-20">
-                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-zinc-800 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="text-zinc-400"
-                  >
-                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2" />
-                    <rect x="2" y="14" width="20" height="8" rx="2" ry="2" />
-                    <line x1="6" y1="6" x2="6.01" y2="6" />
-                    <line x1="6" y1="18" x2="6.01" y2="18" />
-                  </svg>
-                </div>
-                <h3 className="text-base sm:text-lg font-semibold text-zinc-100 mb-2">
+              <div className="rounded-2xl bg-[#101016] border border-white/[0.06] px-5 py-12 text-center">
+                <h3 className="text-[18px] font-semibold text-[#f4f4f7] mb-2">
                   Nenhum servidor cadastrado
                 </h3>
-                <p className="text-zinc-400 mb-4 text-sm">
+                <p className="text-[15px] text-[#9d9dad] mb-5">
                   Adicione seu primeiro servidor UAZAPI para começar o
                   monitoramento.
                 </p>
                 {isAdmin && (
                   <button
                     onClick={() => setShowAddModal(true)}
-                    className="px-6 py-2.5 rounded-xl bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors"
+                    className="px-5 py-2 rounded-full bg-[#f4f4f7] text-[#08080b] text-[13px] font-medium hover:bg-white transition-colors"
                   >
                     Adicionar Servidor
                   </button>
                 )}
               </div>
             ) : (
-              <div className="text-center py-12">
-                <p className="text-zinc-400 text-sm">
-                  Servidores cadastrados mas sem dados ainda. Clique em
-                  &quot;Atualizar&quot; para buscar os dados.
-                </p>
+              <div className="rounded-2xl bg-[#101016] border border-white/[0.06] px-5 py-10 text-center text-[15px] text-[#9d9dad]">
+                Servidores cadastrados mas sem dados ainda. Clique em
+                &quot;Atualizar&quot; para buscar os dados.
               </div>
             )}
           </>

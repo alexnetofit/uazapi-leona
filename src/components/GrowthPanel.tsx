@@ -7,11 +7,11 @@ type Metric = "connected" | "total";
 
 const PLAYERS = ["Leona", "Zapdata", "Zapix", "BrutalZap"] as const;
 
-const STROKE: Record<string, string> = {
-  Leona: "#f4f4f7",
-  Zapdata: "#8b8b98",
-  Zapix: "#6a6a7c",
-  BrutalZap: "#4a4a58",
+const COLOR: Record<string, string> = {
+  Leona: "#34d8a0",
+  Zapdata: "#6ea8ff",
+  Zapix: "#f5c15a",
+  BrutalZap: "#c084fc",
 };
 
 function formatDay(isoDay: string) {
@@ -108,8 +108,8 @@ function Sparkline({
             <polyline
               key={name}
               fill="none"
-              stroke={STROKE[name]}
-              strokeWidth={name === "Leona" ? 2.25 : 1.4}
+              stroke={COLOR[name] ?? "#8b8b98"}
+              strokeWidth={name === "Leona" ? 2.4 : 1.6}
               strokeLinecap="round"
               strokeLinejoin="round"
               points={pts}
@@ -133,8 +133,8 @@ function Sparkline({
         {PLAYERS.map((name) => (
           <div key={name} className="flex items-center gap-2 text-[13px] text-[#9d9dad]">
             <span
-              className="w-3 h-px"
-              style={{ background: STROKE[name], height: name === "Leona" ? 2 : 1 }}
+              className="w-2 h-2 rounded-full"
+              style={{ background: COLOR[name] ?? "#8b8b98" }}
             />
             {name}
           </div>
@@ -194,7 +194,9 @@ export default function GrowthPanel({
                 onClick={() => setMetric(key)}
                 className={`px-3.5 py-1.5 text-[13px] rounded-full transition-colors ${
                   metric === key
-                    ? "bg-[#f4f4f7] text-[#08080b] font-medium"
+                    ? key === "connected"
+                      ? "bg-[#34d8a0] text-[#06261b] font-medium"
+                      : "bg-[#6ea8ff] text-[#081428] font-medium"
                     : "text-[#9d9dad] hover:text-[#f4f4f7]"
                 }`}
               >
@@ -217,7 +219,13 @@ export default function GrowthPanel({
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-px rounded-2xl overflow-hidden bg-white/[0.06] border border-white/[0.06] mb-8">
             {latestCards.map((card) => (
               <div key={card.name} className="bg-[#101016] px-5 py-5 sm:px-6 sm:py-6">
-                <p className="text-[13px] text-[#9d9dad]">{card.name}</p>
+                <p className="flex items-center gap-2 text-[13px]">
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ background: COLOR[card.name] ?? "#8b8b98" }}
+                  />
+                  <span style={{ color: COLOR[card.name] ?? "#9d9dad" }}>{card.name}</span>
+                </p>
                 <p className="mt-2 text-[28px] sm:text-[34px] font-semibold tracking-[-0.04em] text-[#f4f4f7] leading-none">
                   {formatNumber(card.value)}
                 </p>
@@ -241,7 +249,11 @@ export default function GrowthPanel({
                 <tr className="text-[13px] text-[#6a6a7c]">
                   <th className="font-medium px-5 sm:px-6 py-3">Dia</th>
                   {(data.players.length ? data.players : [...PLAYERS]).map((name) => (
-                    <th key={name} className="font-medium px-3 sm:px-4 py-3 text-right">
+                    <th
+                      key={name}
+                      className="font-medium px-3 sm:px-4 py-3 text-right"
+                      style={{ color: COLOR[name] ?? "#6a6a7c" }}
+                    >
                       {name}
                     </th>
                   ))}

@@ -24,10 +24,8 @@ function DiffBadge({ current, previous }: { current: number; previous: number })
   const isPositive = diff > 0;
   return (
     <span
-      className={`text-[10px] font-medium px-1 py-0.5 rounded ${
-        isPositive
-          ? "text-emerald-400 bg-emerald-950/40"
-          : "text-red-400 bg-red-950/40"
+      className={`text-[11px] font-medium ${
+        isPositive ? "text-[#34d8a0]" : "text-[#ff6b7a]"
       }`}
     >
       {isPositive ? "+" : ""}
@@ -86,34 +84,34 @@ export default function ServerCard({
       : "0";
 
   return (
-    <div className={`relative bg-zinc-900 rounded-2xl border p-4 sm:p-5 hover:shadow-lg hover:shadow-zinc-900/50 transition-shadow ${error ? "border-red-800/60" : "border-zinc-800"} ${isRefreshing ? "animate-pulse" : ""}`}>
+    <div className={`relative rounded-2xl bg-[#101016] border p-5 sm:p-6 ${error ? "border-[#ff6b7a]/35" : "border-white/[0.06]"} ${isRefreshing ? "animate-pulse" : ""}`}>
       {isRefreshing && (
-        <div className="absolute inset-0 bg-zinc-900/40 rounded-2xl z-10 flex items-center justify-center">
-          <div className="flex items-center gap-2 bg-zinc-800 px-3 py-1.5 rounded-lg">
-            <svg className="animate-spin h-3.5 w-3.5 text-blue-400" viewBox="0 0 24 24" fill="none">
+        <div className="absolute inset-0 bg-[#101016]/70 rounded-2xl z-10 flex items-center justify-center">
+          <div className="flex items-center gap-2 bg-[#16161f] px-3 py-1.5 rounded-full">
+            <svg className="animate-spin h-3.5 w-3.5 text-[#6ea8ff]" viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" className="opacity-25" />
               <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" className="opacity-75" />
             </svg>
-            <span className="text-[10px] text-zinc-300">Atualizando...</span>
+            <span className="text-[12px] text-[#f4f4f7]">Atualizando...</span>
           </div>
         </div>
       )}
-      <div className="flex items-center justify-between mb-3 sm:mb-4">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between mb-5">
+        <div className="flex items-center gap-2 min-w-0">
           <div
-            className={`w-2.5 h-2.5 rounded-full ${
+            className={`w-2 h-2 rounded-full shrink-0 ${
               error
-                ? "bg-red-500 shadow-red-500/50 shadow-sm"
+                ? "bg-[#ff6b7a] shadow-[0_0_8px_#ff6b7a]"
                 : connectedInstances > 0
-                  ? "bg-emerald-500 shadow-emerald-500/50 shadow-sm"
-                  : "bg-zinc-400"
+                  ? "bg-[#34d8a0] shadow-[0_0_8px_#34d8a0]"
+                  : "bg-[#6a6a7c]"
             }`}
           />
-          <h3 className="text-sm sm:text-base font-semibold text-zinc-100">
+          <h3 className="text-[15px] font-semibold tracking-[-0.02em] text-[#f4f4f7] truncate">
             {serverName}
           </h3>
           {dc && (
-            <span className="text-[10px] font-medium text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded">
+            <span className="text-[11px] font-medium text-[#9d9dad] bg-[#16161f] px-1.5 py-0.5 rounded-full">
               {dc.toUpperCase()}
             </span>
           )}
@@ -123,7 +121,7 @@ export default function ServerCard({
             <button
               onClick={() => setShowRestartConfirm(true)}
               disabled={restarting || showRestartConfirm}
-              className="text-zinc-500 hover:text-amber-400 transition-colors disabled:opacity-50"
+              className="text-[#6a6a7c] hover:text-[#f5c15a] transition-colors disabled:opacity-50"
               title="Reiniciar servidor"
             >
               {restarting ? (
@@ -145,7 +143,7 @@ export default function ServerCard({
             <button
               onClick={() => setShowRemoveConfirm(true)}
               disabled={showRemoveConfirm}
-              className="text-zinc-500 hover:text-red-400 transition-colors disabled:opacity-50"
+              className="text-[#6a6a7c] hover:text-[#ff6b7a] transition-colors disabled:opacity-50"
               title="Remover servidor"
             >
               <svg
@@ -169,23 +167,23 @@ export default function ServerCard({
       </div>
 
       {showRestartConfirm && (
-        <div className="mb-3 bg-amber-950/30 border border-amber-800/50 rounded-xl p-3">
-          <p className="text-xs text-amber-300 font-medium mb-1">
+        <div className="mb-4 rounded-xl border border-[#f5c15a]/30 bg-[#f5c15a]/8 p-3">
+          <p className="text-[13px] text-[#f5c15a] font-medium mb-1">
             Reiniciar {serverName}?
           </p>
-          <p className="text-[10px] text-amber-400/70 mb-3">
+          <p className="text-[12px] text-[#9d9dad] mb-3">
             Isso reinicia toda a aplicação e força a reconexão de todas as instâncias.
           </p>
           <div className="flex items-center gap-2">
             <button
               onClick={handleRestartServer}
-              className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-[11px] font-medium hover:bg-amber-700 transition-colors"
+              className="px-3 py-1.5 rounded-full bg-[#f5c15a] text-[#1a1404] text-[12px] font-medium"
             >
               Confirmar
             </button>
             <button
               onClick={() => setShowRestartConfirm(false)}
-              className="px-3 py-1.5 rounded-lg bg-zinc-700 text-zinc-300 text-[11px] font-medium hover:bg-zinc-600 transition-colors"
+              className="px-3 py-1.5 rounded-full bg-[#16161f] text-[#9d9dad] text-[12px] font-medium hover:text-[#f4f4f7]"
             >
               Cancelar
             </button>
@@ -194,23 +192,23 @@ export default function ServerCard({
       )}
 
       {showRemoveConfirm && (
-        <div className="mb-3 bg-red-950/30 border border-red-800/50 rounded-xl p-3">
-          <p className="text-xs text-red-300 font-medium mb-1">
+        <div className="mb-4 rounded-xl border border-[#ff6b7a]/30 bg-[#ff6b7a]/8 p-3">
+          <p className="text-[13px] text-[#ff6b7a] font-medium mb-1">
             Remover {serverName}?
           </p>
-          <p className="text-[10px] text-red-400/70 mb-3">
+          <p className="text-[12px] text-[#9d9dad] mb-3">
             O servidor será removido do painel. Essa ação não afeta o servidor em si.
           </p>
           <div className="flex items-center gap-2">
             <button
               onClick={() => { setShowRemoveConfirm(false); onRemove?.(serverName); }}
-              className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-[11px] font-medium hover:bg-red-700 transition-colors"
+              className="px-3 py-1.5 rounded-full bg-[#ff6b7a] text-[#1a0608] text-[12px] font-medium"
             >
               Remover
             </button>
             <button
               onClick={() => setShowRemoveConfirm(false)}
-              className="px-3 py-1.5 rounded-lg bg-zinc-700 text-zinc-300 text-[11px] font-medium hover:bg-zinc-600 transition-colors"
+              className="px-3 py-1.5 rounded-full bg-[#16161f] text-[#9d9dad] text-[12px] font-medium hover:text-[#f4f4f7]"
             >
               Cancelar
             </button>
@@ -220,39 +218,39 @@ export default function ServerCard({
 
       {error ? (
         /* Estado de erro */
-        <div className="bg-red-950/20 border border-red-900/30 rounded-xl p-3 text-center">
-          <p className="text-xs text-red-400 font-medium mb-1">
+        <div className="rounded-xl border border-[#ff6b7a]/25 bg-[#ff6b7a]/8 px-4 py-4 text-center">
+          <p className="text-[13px] text-[#ff6b7a] font-medium mb-1">
             Servidor inacessível
           </p>
-          <p className="text-[10px] text-red-500/70">
+          <p className="text-[12px] text-[#9d9dad]">
             Não foi possível conectar. Verifique o nome e token ou remova este servidor.
           </p>
         </div>
       ) : (
         <>
           {/* Contagem atual */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-2">
-            <div className="text-center">
-              <p className="text-[10px] sm:text-xs text-zinc-400">Total</p>
-              <p className="text-lg sm:text-xl font-bold text-zinc-100">
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            <div>
+              <p className="text-[12px] text-[#9d9dad]">Total</p>
+              <p className="mt-1 text-[22px] font-semibold tracking-[-0.03em] text-[#f4f4f7] leading-none tabular-nums">
                 {totalInstances}
               </p>
               {previous && (
                 <DiffBadge current={totalInstances} previous={previous.totalInstances} />
               )}
             </div>
-            <div className="text-center">
-              <p className="text-[10px] sm:text-xs text-emerald-400">Conectadas</p>
-              <p className="text-lg sm:text-xl font-bold text-emerald-400">
+            <div>
+              <p className="text-[12px] text-[#34d8a0]">Conectadas</p>
+              <p className="mt-1 text-[22px] font-semibold tracking-[-0.03em] text-[#34d8a0] leading-none tabular-nums">
                 {connectedInstances}
               </p>
               {previous && (
                 <DiffBadge current={connectedInstances} previous={previous.connectedInstances} />
               )}
             </div>
-            <div className="text-center">
-              <p className="text-[10px] sm:text-xs text-red-400">Desconectadas</p>
-              <p className="text-lg sm:text-xl font-bold text-red-400">
+            <div>
+              <p className="text-[12px] text-[#ff6b7a]">Desconectadas</p>
+              <p className="mt-1 text-[22px] font-semibold tracking-[-0.03em] text-[#ff6b7a] leading-none tabular-nums">
                 {disconnectedInstances}
               </p>
               {previous && (
@@ -261,41 +259,39 @@ export default function ServerCard({
             </div>
           </div>
 
-          {/* Contagem anterior */}
           {previous && (
-            <div className="bg-zinc-800/50 rounded-lg px-3 py-2 mb-3">
-              <p className="text-[9px] sm:text-[10px] text-zinc-500 mb-1 uppercase tracking-wide">
-                Anterior ({formatDate(previous.timestamp)})
+            <div className="rounded-xl bg-[#16161f] px-3 py-2.5 mb-4">
+              <p className="text-[11px] text-[#6a6a7c] mb-1.5">
+                Anterior · {formatDate(previous.timestamp)}
               </p>
-              <div className="grid grid-cols-3 gap-2 text-center">
-                <span className="text-[11px] sm:text-xs text-zinc-400 font-medium">
+              <div className="grid grid-cols-3 gap-2">
+                <span className="text-[13px] text-[#9d9dad] tabular-nums">
                   {previous.totalInstances}
                 </span>
-                <span className="text-[11px] sm:text-xs text-emerald-500 font-medium">
+                <span className="text-[13px] text-[#34d8a0] tabular-nums">
                   {previous.connectedInstances}
                 </span>
-                <span className="text-[11px] sm:text-xs text-red-500 font-medium">
+                <span className="text-[13px] text-[#ff6b7a] tabular-nums">
                   {previous.disconnectedInstances}
                 </span>
               </div>
             </div>
           )}
 
-          {/* Barra de progresso */}
-          <div className="w-full bg-zinc-800 rounded-full h-1.5 sm:h-2 mb-2 sm:mb-3">
+          <div className="w-full bg-[#16161f] rounded-full h-1.5 mb-3">
             <div
-              className="bg-emerald-500 h-1.5 sm:h-2 rounded-full transition-all duration-500"
+              className="bg-[#34d8a0] h-1.5 rounded-full transition-all duration-500"
               style={{ width: `${connectedPercent}%` }}
             />
           </div>
 
           <div className="flex items-center justify-between">
             {restartResult && (
-              <span className={`text-[10px] font-medium ${restartResult.includes("agendado") ? "text-green-400" : "text-red-400"}`}>
+              <span className={`text-[12px] font-medium ${restartResult.includes("agendado") ? "text-[#34d8a0]" : "text-[#ff6b7a]"}`}>
                 {restartResult}
               </span>
             )}
-            <p className="text-[10px] sm:text-xs text-zinc-500 text-right ml-auto">
+            <p className="text-[12px] text-[#6a6a7c] text-right ml-auto">
               {formatDate(timestamp)}
             </p>
           </div>

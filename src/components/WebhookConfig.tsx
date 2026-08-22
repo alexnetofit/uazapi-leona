@@ -56,7 +56,7 @@ export default function WebhookConfig() {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-xl border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors text-xs sm:text-sm"
+        className="flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-full text-[13px] text-[#9d9dad] hover:text-[#f4f4f7] transition-colors"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -73,7 +73,7 @@ export default function WebhookConfig() {
         </svg>
         <span className="hidden sm:inline">Webhook</span>
         {savedUrl && (
-          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+          <span className="w-1.5 h-1.5 rounded-full bg-[#34d8a0]" />
         )}
       </button>
 

@@ -329,11 +329,17 @@ export default function SearchBar({ userRole }: SearchBarProps) {
   };
 
   return (
-    <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-4 sm:p-6 mb-6">
-      <h2 className="text-base sm:text-lg font-semibold text-zinc-100 mb-3 sm:mb-4">
-        Buscar Número
-      </h2>
+    <section className="mb-14">
+      <div className="mb-6">
+        <h2 className="text-[28px] sm:text-[32px] font-semibold tracking-[-0.03em] text-[#f4f4f7] leading-tight">
+          Buscar
+        </h2>
+        <p className="text-[15px] text-[#9d9dad] mt-1.5">
+          Número da instância em qualquer servidor
+        </p>
+      </div>
 
+      <div className="rounded-2xl bg-[#101016] border border-white/[0.06] p-5 sm:p-6">
       <div className="flex gap-2 sm:gap-3">
         <input
           type="text"
@@ -341,12 +347,12 @@ export default function SearchBar({ userRole }: SearchBarProps) {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Digite o número (ex: 5511999...)"
-          className="flex-1 min-w-0 px-3 sm:px-4 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-100 placeholder-zinc-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          className="flex-1 min-w-0 px-4 py-2.5 rounded-full bg-[#16161f] border border-white/[0.06] text-[15px] text-[#f4f4f7] placeholder-[#6a6a7c] focus:outline-none focus:border-[#6ea8ff]/50 transition-colors"
         />
         <button
           onClick={handleSearch}
           disabled={loading}
-          className="px-4 sm:px-6 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+          className="px-5 sm:px-6 py-2.5 rounded-full bg-[#6ea8ff] text-[#081428] text-[13px] font-medium hover:bg-[#8cbcff] disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
         >
           {loading ? (
             <span className="flex items-center gap-2">
@@ -378,7 +384,7 @@ export default function SearchBar({ userRole }: SearchBarProps) {
       </div>
 
       {error && (
-        <div className="mt-3 bg-red-950/30 text-red-400 text-sm px-4 py-2 rounded-xl">
+        <div className="mt-3 bg-[#ff6b7a]/10 text-[#ff6b7a] text-[13px] px-4 py-2 rounded-xl">
           {error}
         </div>
       )}
@@ -388,12 +394,12 @@ export default function SearchBar({ userRole }: SearchBarProps) {
           {results.map((entry, index) => (
             <div
               key={`${entry.server}-${index}`}
-              className="bg-emerald-950/20 border border-emerald-800 rounded-xl p-3 sm:p-4"
+              className="rounded-xl border border-[#34d8a0]/25 bg-[#34d8a0]/6 p-4"
             >
               <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
                 <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-                  <span className="font-semibold text-emerald-300 text-sm sm:text-base truncate">
+                  <div className="w-2 h-2 rounded-full bg-[#34d8a0] shadow-[0_0_8px_#34d8a0] shrink-0" />
+                  <span className="font-semibold text-[#34d8a0] text-[15px] truncate">
                     Encontrado no servidor: {entry.server}
                   </span>
                 </div>
@@ -401,7 +407,7 @@ export default function SearchBar({ userRole }: SearchBarProps) {
                   <button
                     onClick={() => handleCheckLimits(index)}
                     disabled={entry.limitsLoading}
-                    className="px-3 py-1.5 rounded-lg bg-purple-600 text-white text-xs font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                    className="px-3 py-1.5 rounded-full bg-[#c084fc] text-[#1a0828] text-[12px] font-medium hover:bg-[#d4a5ff] disabled:opacity-50 transition-colors whitespace-nowrap"
                   >
                     {entry.limitsLoading
                       ? "Verificando..."
@@ -412,7 +418,7 @@ export default function SearchBar({ userRole }: SearchBarProps) {
                   <button
                     onClick={() => handleCheckQueue(index)}
                     disabled={entry.queueLoading}
-                    className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                    className="px-3 py-1.5 rounded-full bg-[#6ea8ff] text-[#081428] text-[12px] font-medium hover:bg-[#8cbcff] disabled:opacity-50 transition-colors whitespace-nowrap"
                   >
                     {entry.queueLoading ? "Verificando..." : "Verificar Fila"}
                   </button>
@@ -420,19 +426,19 @@ export default function SearchBar({ userRole }: SearchBarProps) {
               </div>
 
               {(entry.limitsData !== null || entry.limitsError) && (
-                <div className="mb-3 rounded-lg border border-purple-800/60 bg-purple-950/30 overflow-hidden">
-                  <div className="px-3 py-1.5 bg-purple-950/60 border-b border-purple-800/50 flex items-center justify-between">
-                    <span className="text-xs font-semibold text-purple-300">
+                <div className="mb-3 rounded-xl border border-[#c084fc]/30 bg-[#c084fc]/8 overflow-hidden">
+                  <div className="px-3 py-1.5 border-b border-[#c084fc]/20 flex items-center justify-between">
+                    <span className="text-[12px] font-semibold text-[#c084fc]">
                       Limites / Bloqueio WhatsApp
                     </span>
                   </div>
                   <div className="p-3 max-h-80 overflow-auto">
                     {entry.limitsError ? (
-                      <pre className="text-[11px] text-red-300 whitespace-pre-wrap break-all font-mono">
+                      <pre className="text-[11px] text-[#ff6b7a] whitespace-pre-wrap break-all font-mono">
                         {entry.limitsError}
                       </pre>
                     ) : (
-                      <pre className="text-[11px] text-zinc-200 whitespace-pre-wrap break-all font-mono">
+                      <pre className="text-[11px] text-[#f4f4f7] whitespace-pre-wrap break-all font-mono">
                         {JSON.stringify(entry.limitsData, null, 2)}
                       </pre>
                     )}
@@ -443,10 +449,10 @@ export default function SearchBar({ userRole }: SearchBarProps) {
               <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm overflow-x-auto">
                 {Object.entries(entry.instance).map(([key, value]) => (
                   <div key={key} className="flex gap-2">
-                    <span className="font-medium text-zinc-400 min-w-[100px] sm:min-w-[140px] shrink-0">
+                    <span className="font-medium text-[#9d9dad] min-w-[100px] sm:min-w-[140px] shrink-0">
                       {key}:
                     </span>
-                    <span className="text-zinc-100 break-all">
+                    <span className="text-[#f4f4f7] break-all">
                       {typeof value === "object"
                         ? JSON.stringify(value)
                         : String(value ?? "")}
@@ -456,16 +462,16 @@ export default function SearchBar({ userRole }: SearchBarProps) {
               </div>
 
               {entry.queuePending !== null && (
-                <div className="mt-3 pt-3 border-t border-emerald-800/50">
+                <div className="mt-3 pt-3 border-t border-[#34d8a0]/15">
                   <div className="flex flex-wrap items-center gap-3 mb-2">
-                    <span className="text-sm text-zinc-200">
+                    <span className="text-[15px] text-[#f4f4f7]">
                       Mensagens na fila:{" "}
-                      <strong className={`text-base ${entry.queuePending > 20 ? "text-red-400" : "text-amber-400"}`}>
+                      <strong className={`tabular-nums ${entry.queuePending > 20 ? "text-[#ff6b7a]" : "text-[#f5c15a]"}`}>
                         {entry.queuePending}
                       </strong>
                     </span>
                     {entry.queueStatus && (
-                      <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.5 rounded">
+                      <span className="text-[11px] bg-[#16161f] text-[#9d9dad] px-1.5 py-0.5 rounded-full">
                         {entry.queueStatus}
                       </span>
                     )}
@@ -474,21 +480,21 @@ export default function SearchBar({ userRole }: SearchBarProps) {
                     <button
                       onClick={() => handleReduceDelay(index)}
                       disabled={entry.delayLoading}
-                      className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-medium hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                      className="px-3 py-1.5 rounded-full bg-[#f5c15a] text-[#1a1404] text-[12px] font-medium disabled:opacity-50"
                     >
                       {entry.delayLoading ? "Reduzindo..." : "Reduzir Delay"}
                     </button>
                     <button
                       onClick={() => handleResetInstance(index)}
                       disabled={entry.resetLoading}
-                      className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+                      className="px-3 py-1.5 rounded-full bg-[#ff6b7a] text-[#1a0608] text-[12px] font-medium disabled:opacity-50"
                     >
                       {entry.resetLoading ? "Reiniciando..." : "Reiniciar Instância"}
                     </button>
                     <button
                       onClick={() => handleTestSync(index)}
                       disabled={entry.syncLoading}
-                      className="px-3 py-1.5 rounded-lg bg-blue-700 text-white text-xs font-medium hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                      className="px-3 py-1.5 rounded-full bg-[#6ea8ff] text-[#081428] text-[12px] font-medium disabled:opacity-50"
                     >
                       {entry.syncLoading ? "Enviando..." : "Teste Sync"}
                     </button>
@@ -496,7 +502,7 @@ export default function SearchBar({ userRole }: SearchBarProps) {
                       <button
                         onClick={() => handleClearQueue(index)}
                         disabled={entry.clearLoading}
-                        className="px-3 py-1.5 rounded-lg bg-red-900 text-red-200 text-xs font-medium hover:bg-red-800 disabled:opacity-50 transition-colors border border-red-700"
+                        className="px-3 py-1.5 rounded-full border border-[#ff6b7a]/40 text-[#ff6b7a] text-[12px] font-medium disabled:opacity-50"
                       >
                         {entry.clearLoading ? "Apagando..." : "Apagar Fila"}
                       </button>
@@ -504,22 +510,22 @@ export default function SearchBar({ userRole }: SearchBarProps) {
                   </div>
                   <div className="flex flex-wrap gap-2 mt-2">
                     {entry.delayResult && (
-                      <span className={`text-xs ${entry.delayResult.includes("sucesso") ? "text-green-400" : "text-red-400"}`}>
+                      <span className={`text-[12px] ${entry.delayResult.includes("sucesso") ? "text-[#34d8a0]" : "text-[#ff6b7a]"}`}>
                         {entry.delayResult}
                       </span>
                     )}
                     {entry.resetResult && (
-                      <span className={`text-xs ${entry.resetResult.includes("sucesso") ? "text-green-400" : "text-red-400"}`}>
+                      <span className={`text-[12px] ${entry.resetResult.includes("sucesso") ? "text-[#34d8a0]" : "text-[#ff6b7a]"}`}>
                         {entry.resetResult}
                       </span>
                     )}
                     {entry.clearResult && (
-                      <span className={`text-xs ${entry.clearResult.includes("sucesso") ? "text-green-400" : "text-red-400"}`}>
+                      <span className={`text-[12px] ${entry.clearResult.includes("sucesso") ? "text-[#34d8a0]" : "text-[#ff6b7a]"}`}>
                         {entry.clearResult}
                       </span>
                     )}
                     {entry.syncResult && (
-                      <span className={`text-xs ${entry.syncResult.includes("sucesso") ? "text-green-400" : "text-red-400"}`}>
+                      <span className={`text-[12px] ${entry.syncResult.includes("sucesso") ? "text-[#34d8a0]" : "text-[#ff6b7a]"}`}>
                         {entry.syncResult}
                       </span>
                     )}
@@ -530,7 +536,7 @@ export default function SearchBar({ userRole }: SearchBarProps) {
           ))}
 
           {results.length > 1 && (
-            <div className="bg-zinc-800/50 text-zinc-500 text-xs px-4 py-2 rounded-xl text-center">
+            <div className="bg-[#16161f] text-[#9d9dad] text-[13px] px-4 py-2 rounded-xl text-center">
               Encontrado em {results.length} servidores
             </div>
           )}
@@ -539,11 +545,12 @@ export default function SearchBar({ userRole }: SearchBarProps) {
 
       {results.length === 0 && searchExhausted && (
         <div className="mt-4">
-          <div className="bg-zinc-800/50 text-zinc-400 text-sm px-4 py-3 rounded-xl text-center">
+          <div className="bg-[#16161f] text-[#9d9dad] text-[15px] px-4 py-3 rounded-xl text-center">
             Número não encontrado em nenhum servidor
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </section>
   );
 }
